@@ -35,7 +35,7 @@ Activa el modo desarrollador de Discord para copiar IDs. Coloca las categorías 
 
 Los textos de las preguntas y los mensajes predefinidos se pueden cambiar en `.env`. El formulario tiene cinco preguntas obligatorias (límite de los modales de Discord). Los marcadores disponibles en los mensajes son `{user}`, `{character}`, `{realm}`, `{server}` y `{channel}`.
 
-## Despliegue con Docker Engine (sin Compose)
+## Despliegue con Docker Compose
 
 Desde este directorio, en Ubuntu:
 
@@ -43,13 +43,19 @@ Desde este directorio, en Ubuntu:
 cp .env.example .env
 # Edita .env y completa todos los valores.
 mkdir -p data
-docker build -t whitebird-recruitment-bot .
-docker run --rm --env-file .env whitebird-recruitment-bot npm run register
-docker run -d --name whitebird-recruitment-bot --restart unless-stopped --env-file .env -v "$(pwd)/data:/app/data" whitebird-recruitment-bot
-docker logs -f whitebird-recruitment-bot
+docker compose run --rm bot npm run register
+docker compose up -d --build
+docker compose logs -f bot
 ```
 
-La base `data/whitebird-recruitment.sqlite` conserva cuál es el último panel. Para actualizar, haz una copia de `data/`, detén y elimina el contenedor anterior, reconstruye la imagen, registra de nuevo los comandos y arranca el contenedor.
+La base `data/whitebird-recruitment.sqlite` conserva cuál es el último panel. El archivo `compose.yaml` monta `data/` para mantener esa información aunque se reemplace el contenedor. Para actualizar, haz una copia de `data/` y ejecuta:
+
+```sh
+docker compose build
+docker compose run --rm bot npm run register
+docker compose up -d
+docker compose logs -f bot
+```
 
 ## Ejecución directa con Node.js
 
