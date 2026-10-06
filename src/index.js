@@ -118,10 +118,15 @@ async function publishApplyPanel(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const previous = getPanel(guildId);
   if (previous?.channel_id === interaction.channelId) {
-    const oldMessage = await interaction.channel.messages.fetch(previous.message_id).catch(() => null);
+    const oldMessage = await interaction.channel.messages.fetch({ message: previous.message_id, force: true }).catch(() => null);
     if (oldMessage) {
-      await oldMessage.edit(applyPanelPayload());
-      return interaction.editReply('He actualizado el panel de applies en este canal.');
+      try {
+        await oldMessage.edit(applyPanelPayload());
+        return interaction.editReply('He actualizado el panel de applies en este canal.');
+      } catch (error) {
+        if (error?.code !== 10008) throw error;
+        console.warn(`El panel guardado ${previous.message_id} ya no existe; se publicará uno nuevo.`);
+      }
     }
   }
   const message = await interaction.channel.send(applyPanelPayload());
