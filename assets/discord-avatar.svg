@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Whitebird Recruitment bot avatar">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#172b4d"/>
+      <stop offset="1" stop-color="#071426"/>
+    </linearGradient>
+    <linearGradient id="wing" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#cfe7f2"/>
+    </linearGradient>
+  </defs>
+  <circle cx="128" cy="128" r="124" fill="url(#bg)"/>
+  <circle cx="128" cy="128" r="113" fill="none" stroke="#e5b85c" stroke-width="6"/>
+  <!-- compact whitebird mark: swept wing and beak -->
+  <path d="M54 145c21-4 35-15 48-34 15-23 35-38 64-38-12 11-18 22-20 34 18-5 37-3 56 7-19 2-32 8-42 18 13 6 25 15 36 29-23-6-44-5-63 4-22 11-44 14-72 8 17-5 29-11 39-20-15 2-30-1-46-8z" fill="url(#wing)"/>
+  <path d="M164 106c13-1 25 2 38 8l-24 7z" fill="#e5b85c"/>
+  <circle cx="153" cy="91" r="4.5" fill="#172b4d"/>
+  <!-- small application/check accent -->
+  <path d="M88 184l13 13 27-31" fill="none" stroke="#e5b85c" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
