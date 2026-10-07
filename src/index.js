@@ -36,6 +36,8 @@ const applyIntroduction = `Hola 👋 Te cuento un poco cómo funcionamos para qu
 
 Somos una guild de gente veterana que disfruta el progreso. Nos gusta avanzar, hacer las cosas bien y notar que cada semana el grupo mejora. No somos de correr sin cabeza, pero tampoco de quedarnos estancados porque «ya caerá».
 
+Raidamos de lunes a jueves, de 23:30 a 1:30. Gestionamos el loot con RCLootCouncil y la asistencia con WoWAudit. Nos gusta tenerlo todo organizado para que, dentro de raid, podamos centrarnos en jugar.
+
 Pedimos compromiso razonable:
 • Avisar asistencias
 • Venir preparado
@@ -44,7 +46,7 @@ Pedimos compromiso razonable:
 
 Aquí nadie es perfecto, pero sí pedimos ganas de mejorar. Morimos, aprendemos, ajustamos… y volvemos a tirar. Sin dramas innecesarios ni gritos por voice.
 
-El ambiente es importante para nosotros. Somos competitivos cuando toca, pero también sabemos reírnos cuando el boss decide que hoy no es el día (porque siempre hay un día así 😏.
+El ambiente es importante para nosotros. Somos competitivos cuando toca, pero también sabemos reírnos cuando el boss decide que hoy no es el día (porque siempre hay un día así 😏).
 
 Si buscas una guild estable, con rumbo, donde el progreso se disfruta y el grupo suma más que el ego individual, probablemente encajemos.`;
 
@@ -381,6 +383,29 @@ async function acceptApplication(interaction) {
     });
   } else if (raiderChannel.name !== raiderChannelName) {
     await raiderChannel.setName(raiderChannelName, 'Nombre actualizado al personaje y reino de la solicitud');
+  }
+
+  const raiderWelcomeMarker = 'Este será tu espacio personal con el staff para:';
+  const recentRaiderMessages = await raiderChannel.messages.fetch({ limit: 100 });
+  const hasRaiderWelcome = recentRaiderMessages.some((message) =>
+    message.author.id === interaction.client.user.id && message.content.includes(raiderWelcomeMarker)
+  );
+  if (!hasRaiderWelcome) {
+    const raiderWelcome = `<@${applicant.id}>\n\nBienvenido\n\nEste será tu espacio personal con el staff para:
+• Feedback de raids
+• Seguimiento de progreso
+• Asistencia y disponibilidad
+• Ajustes y mejoras personales
+• Cualquier cosa que necesites hablar de forma directa
+
+Ponte en este servidor de Discord un alias con el nombre de tu main para que nos sea fácil identificarte.
+
+Si tienes profesiones subidas a nivel máximo, reacciona a este mensaje para que la gente te pueda pedir y pagar por crafteos:
+https://discord.com/channels/1463652921898963146/1463652923253719247`;
+    await raiderChannel.send({
+      content: raiderWelcome,
+      allowedMentions: { users: [applicant.id], roles: [], parse: [] }
+    });
   }
 
   if (!archiveMessage) {
