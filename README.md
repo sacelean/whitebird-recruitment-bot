@@ -13,8 +13,9 @@ Bot independiente para recibir solicitudes de nuevos reclutas y gestionar el pas
    - disponibilidad y motivación para entrar en Whitebird.
 3. Al enviar, se crea `apply-nombre-del-personaje` dentro de la categoría de solicitudes. Solo el candidato, los roles de `OFFICER_ROLE_IDS` y el bot pueden ver y escribir en ese canal. El bot publica un mensaje de recepción configurable, las respuestas y enlaces de perfil EU a Raider.IO y Warcraft Logs construidos con el personaje y reino indicados.
 4. Un oficial ejecuta `/apply-aceptar usuario:@miembro` desde el canal privado correspondiente. El bot manda el mensaje de aceptación por DM (o en el canal privado de raider si la persona tiene los DMs cerrados), guarda una transcripción `.txt` en el canal de entrada y elimina el canal de solicitud solo después de que la transcripción se haya publicado correctamente. También crea `raider-personaje-reino` en la categoría de raiders.
+5. Para rechazar, un oficial ejecuta `/apply-rechazar usuario:@miembro` en el canal del apply. Puede añadir el argumento opcional `motivo`; el bot envía el rechazo por DM, archiva la transcripción en el canal de entrada y elimina el canal. Si los MD están cerrados, conserva el canal para que el oficial pueda contactar al candidato y volver a intentarlo.
 
-El panel se publica o actualiza con `/apply-panel`. Solo el último panel registrado acepta nuevos formularios. Una persona con una solicitud abierta no puede crear otra hasta que su canal anterior se cierre. Al aceptar, la transcripción se guarda en `ENTRY_CHANNEL_ID` y el canal temporal del apply se elimina; el canal privado de raider se conserva.
+El panel se publica o actualiza con `/apply-panel`. Solo el último panel registrado acepta nuevos formularios. Una persona con una solicitud abierta no puede crear otra hasta que su canal anterior se cierre. Al aceptar o rechazar, la transcripción se guarda en `ENTRY_CHANNEL_ID` y el canal temporal del apply se elimina; al aceptar, el canal privado de raider se conserva.
 
 ## Configuración
 
@@ -34,7 +35,7 @@ ENTRY_CHANNEL_ID=id_canal_entrada
 
 Activa el modo desarrollador de Discord para copiar IDs. Coloca las categorías, el canal de entrada y los roles dentro del servidor configurado. En el canal de entrada, el bot necesita `View Channels`, `Send Messages`, `Read Message History` y `Attach Files`. Añade todos los roles de oficiales que deban poder ver y hablar en los canales privados.
 
-Los textos de las preguntas y los mensajes predefinidos se pueden cambiar en `.env`. El mensaje de aceptación predeterminado es la bienvenida de Recluta integrada en el bot. Si ya tenías una variable `APPLY_ACCEPTED_MESSAGE` en `.env` con el texto anterior, elimínala para usar la bienvenida nueva. El formulario tiene cinco preguntas obligatorias (límite de los modales de Discord). Los marcadores disponibles en los mensajes son `{user}`, `{character}`, `{realm}`, `{server}` y `{channel}`.
+Los textos de las preguntas y los mensajes predefinidos se pueden cambiar en `.env`. El mensaje de aceptación predeterminado es la bienvenida de Recluta integrada en el bot. Si ya tenías una variable `APPLY_ACCEPTED_MESSAGE` en `.env` con el texto anterior, elimínala para usar la bienvenida nueva. El mensaje de rechazo también se puede personalizar con `APPLY_REJECTED_MESSAGE`. Los marcadores disponibles son `{user}`, `{character}`, `{realm}`, `{server}`, `{channel}` y, para rechazo, `{reason}`.
 
 ## Despliegue con Docker Compose
 
@@ -48,6 +49,8 @@ docker compose run --rm bot npm run register
 docker compose up -d --build
 docker compose logs -f bot
 ```
+
+Cuando añadas o cambies comandos, vuelve a ejecutar `docker compose run --rm bot npm run register` para registrarlos en Discord.
 
 La base `data/whitebird-recruitment.sqlite` conserva cuál es el último panel. El archivo `compose.yaml` monta `data/` para mantener esa información aunque se reemplace el contenedor. Para actualizar, haz una copia de `data/` y ejecuta:
 

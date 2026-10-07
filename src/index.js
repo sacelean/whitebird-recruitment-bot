@@ -75,14 +75,14 @@ async function fetchAllMessages(channel) {
   return messages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
 }
 
-function renderTranscript(messages, { applicant, character, realm, acceptedBy }) {
+function renderTranscript(messages, { applicant, character, realm, resolvedBy, outcome }) {
   const lines = [
     'TRANSCRIPCIÓN DE SOLICITUD WHITEBIRD',
     `Candidato: ${applicant.user.tag} (${applicant.id})`,
     `Personaje: ${character}`,
     `Reino: ${realm}`,
-    `Aceptado por: ${acceptedBy.tag} (${acceptedBy.id})`,
-    `Fecha de aceptación: ${new Date().toISOString()}`,
+    `${outcome} por: ${resolvedBy.tag} (${resolvedBy.id})`,
+    `Fecha de ${outcome.toLowerCase()}: ${new Date().toISOString()}`,
     '',
     'HISTORIAL DEL CANAL',
     ''
@@ -94,8 +94,18 @@ function renderTranscript(messages, { applicant, character, realm, acceptedBy })
       if (embed.title) lines.push(`Título: ${embed.title}`);
       if (embed.description) lines.push(embed.description);
       for (const field of embed.fields) lines.push(`${field.name}: ${field.value}`);
+      const mediaUrl = embed.video?.url || embed.image?.url || embed.thumbnail?.url;
+      if (mediaUrl) lines.push(`${/\.gif(?:v)?(?:\?|$)/i.test(mediaUrl) ? 'GIF' : 'Multimedia'}: ${mediaUrl}`);
+      else if (embed.url) lines.push(`Enlace insertado: ${embed.url}`);
     }
-    for (const attachment of message.attachments.values()) lines.push(`Adjunto: ${attachment.name} — ${attachment.url}`);
+    for (const attachment of message.attachments.values()) {
+      const isGif = attachment.contentType?.includes('image/gif') || /\.gif(?:v)?$/i.test(attachment.name || attachment.url);
+      lines.push(`${isGif ? 'GIF' : 'Adjunto'}: ${attachment.name || 'archivo'} — ${attachment.url}`);
+    }
+    for (const sticker of message.stickers.values()) lines.push(`Sticker: ${sticker.name}${sticker.url ? ` — ${sticker.url}` : ''}`);
+    if (!message.content && message.embeds.length === 0 && message.attachments.size === 0 && message.stickers.size === 0) {
+      lines.push('[Mensaje sin texto ni adjuntos disponibles en el historial de Discord]');
+    }
     lines.push('');
   }
   return lines.join('\n');
@@ -334,7 +344,7 @@ async function acceptApplication(interaction) {
 
   if (!archiveMessage) {
     const transcriptMessages = await fetchAllMessages(interaction.channel);
-    const transcript = renderTranscript(transcriptMessages, { applicant, character, realm, acceptedBy: interaction.user });
+    const transcript = renderTranscript(transcriptMessages, { applicant, character, realm, resolvedBy: interaction.user, outcome: 'Aceptado' });
     const filename = `apply-${cleanChannelName(character)}-${cleanChannelName(realm)}-transcripcion.txt`.slice(0, 120);
     archiveMessage = await entryChannel.send({
       content: `Solicitud aceptada · ${character} · ${realm}\nCandidato: ${applicant.user.tag}\nPersonaje: ${character} · ${realm}\nOficial: ${interaction.user.tag}\nCanal archivado: ${interaction.channel.name}\n${archiveMarker}`,
@@ -369,6 +379,87 @@ async function acceptApplication(interaction) {
   return interaction.editReply(`Solicitud aceptada. ${deliveryText} Transcripción guardada en ${entryChannel} y canal de apply eliminado. Canal de raider: ${raiderChannel}.`);
 }
 
+async function rejectApplication(interaction) {
+  if (!isOfficer(interaction)) return interaction.reply(unauthorizedReply());
+  if (!interaction.appPermissions?.has(PermissionFlagsBits.ManageChannels)) {
+    return interaction.reply({ content: 'El bot necesita **Gestionar canales** para archivar y eliminar el canal del apply.', flags: MessageFlags.Ephemeral });
+  }
+  if (interaction.channel?.type !== ChannelType.GuildText) {
+    return interaction.reply({ content: 'Ejecuta `/apply-rechazar` dentro del canal de solicitud correspondiente.', flags: MessageFlags.Ephemeral });
+  }
+
+  const applicantUser = interaction.options.getUser('usuario', true);
+  const openTopic = `whitebird-apply:${guildId}:${applicantUser.id}`;
+  const rejectedTopic = `whitebird-apply-rejected:${guildId}:${applicantUser.id}`;
+  const alreadyRejected = interaction.channel.topic === rejectedTopic;
+  if (interaction.channel.topic !== openTopic && !alreadyRejected) {
+    return interaction.reply({ content: 'Este canal no es la solicitud abierta de ese usuario.', flags: MessageFlags.Ephemeral });
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const guild = interaction.guild;
+  const applicant = await guild.members.fetch(applicantUser.id);
+  const applicationMessages = await interaction.channel.messages.fetch({ limit: 100 });
+  const applicationEmbed = applicationMessages.flatMap((message) => message.embeds)
+    .find((embed) => embed.title?.startsWith('Apply · '));
+  const character = applicationEmbed?.title?.slice('Apply · '.length).trim() || applicant.displayName;
+  const realm = applicationEmbed?.fields?.find((field) => field.name === questionLabels[1].slice(0, 256))?.value?.trim() || 'reino';
+
+  let entryChannel;
+  try {
+    entryChannel = await findEntryChannel(guild);
+  } catch (error) {
+    return interaction.editReply(`No puedo archivar la solicitud: ${error.message}`);
+  }
+
+  const archiveMarker = `apply-rejected-transcript:${interaction.channelId}`;
+  const archiveMessages = await entryChannel.messages.fetch({ limit: 100 });
+  let archiveMessage = archiveMessages.find((message) => message.content.includes(archiveMarker));
+  if (!archiveMessage) {
+    const transcriptMessages = await fetchAllMessages(interaction.channel);
+    const transcript = renderTranscript(transcriptMessages, { applicant, character, realm, resolvedBy: interaction.user, outcome: 'Rechazado' });
+    const filename = `apply-${cleanChannelName(character)}-${cleanChannelName(realm)}-transcripcion.txt`.slice(0, 120);
+    archiveMessage = await entryChannel.send({
+      content: `Solicitud rechazada · ${character} · ${realm}\nCandidato: ${applicant.user.tag}\nPersonaje: ${character} · ${realm}\nOficial: ${interaction.user.tag}\nCanal archivado: ${interaction.channel.name}\n${archiveMarker}`,
+      files: [new AttachmentBuilder(Buffer.from(transcript, 'utf8'), { name: filename })],
+      allowedMentions: { parse: [] }
+    });
+  }
+
+  const notifyMarker = `rejection-notified:${interaction.channelId}`;
+  const wasNotified = alreadyRejected || archiveMessage.content.includes(notifyMarker);
+  if (!wasNotified) {
+    const reason = interaction.options.getString('motivo')?.trim() || '';
+    const defaultMessage = `Antes de nada, gracias por el apply y por querer contar con nosotros. Se nota cuando alguien aplica con intención, y eso siempre se agradece.
+
+Lo hemos revisado con calma, pero en este momento no podemos incorporarte en el roster. La decisión no es personal; con la composición actual no vemos que podamos incluirte en la raid.
+
+Preferimos ser sinceros desde el principio antes que hacerte entrar sin tenerlo claro y que nadie se sienta a medias.
+
+Aun así, gracias por el interés y por el tiempo que te has tomado. Si más adelante la situación cambia o volvemos a abrir hueco que encaje mejor con tu perfil, podemos volver a hablar sin problema.
+
+Te deseamos que encuentres un grupo donde te sientas cómodo y puedas disfrutar del progreso como toca [⚔️](https://discord.com/assets/fa2c28d64be33d41.svg)
+
+Un saludo y suerte. [💪](https://discord.com/assets/6550bf7986e6b411.svg)
+
+{reason}`;
+    const template = process.env.APPLY_REJECTED_MESSAGE || defaultMessage;
+    const message = fillTemplate(template, {
+      user: `<@${applicant.id}>`, character, realm, server: guild.name,
+      channel: `<#${interaction.channelId}>`, reason: reason ? `\n\nNota: ${reason}` : ''
+    }).trim();
+    try {
+      await applicant.send({ content: message, allowedMentions: { users: [applicant.id], roles: [], parse: [] } });
+    } catch {
+      return interaction.editReply('La transcripción quedó guardada, pero no pude enviar el rechazo por MD (puede tener los MD cerrados). El canal sigue abierto; contacta al candidato o vuelve a intentarlo después de resolverlo.');
+    }
+    archiveMessage = await archiveMessage.edit({ content: `${archiveMessage.content}\n${notifyMarker}` });
+  }
+
+  await interaction.channel.delete(`Apply archivado en ${entryChannel.name}; solicitud rechazada por ${interaction.user.tag}`);
+  return interaction.editReply(`Solicitud rechazada. ${wasNotified ? 'El aviso ya se había enviado.' : 'Mensaje enviado por MD.'} Transcripción guardada en ${entryChannel} y canal de apply eliminado.`);
+}
+
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Whitebird Recruitment conectado como ${readyClient.user.tag}`);
 });
@@ -395,6 +486,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.commandName === 'apply-panel') return await publishApplyPanel(interaction);
     if (interaction.commandName === 'apply-aceptar') return await acceptApplication(interaction);
+    if (interaction.commandName === 'apply-rechazar') return await rejectApplication(interaction);
   } catch (error) {
     console.error('Error en flujo de reclutamiento:', error);
     const message = 'Ha ocurrido un error. Avisa a un oficial para que revise el bot.';

@@ -13,7 +13,12 @@ const commands = [
   new SlashCommandBuilder()
     .setName('apply-aceptar')
     .setDescription('Acepta la solicitud de un miembro y crea su canal privado de raider')
-    .addUserOption((option) => option.setName('usuario').setDescription('Persona cuya solicitud se acepta').setRequired(true))
+    .addUserOption((option) => option.setName('usuario').setDescription('Persona cuya solicitud se acepta').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('apply-rechazar')
+    .setDescription('Rechaza una solicitud, avisa al candidato y archiva la transcripción')
+    .addUserOption((option) => option.setName('usuario').setDescription('Persona cuya solicitud se rechaza').setRequired(true))
+    .addStringOption((option) => option.setName('motivo').setDescription('Motivo opcional que se incluirá en el mensaje al candidato').setMaxLength(500))
 ].map((command) => command.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(token);
