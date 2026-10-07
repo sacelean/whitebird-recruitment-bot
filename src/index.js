@@ -36,8 +36,6 @@ const applyIntroduction = `Hola 👋 Te cuento un poco cómo funcionamos para qu
 
 Somos una guild de gente veterana que disfruta el progreso. Nos gusta avanzar, hacer las cosas bien y notar que cada semana el grupo mejora. No somos de correr sin cabeza, pero tampoco de quedarnos estancados porque «ya caerá».
 
-Tenemos estructura clara (RL compartido, oficiales de roster, heal lead), organización previa con guías y planificación, y comunicación directa con oficiales. El loot es gestionado con RCLootCouncil y la asistencia con WoWAudit. Nos gusta que las cosas estén ordenadas para que dentro de raid podamos centrarnos en jugar.
-
 Pedimos compromiso razonable:
 • Avisar asistencias
 • Venir preparado
