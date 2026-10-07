@@ -12,12 +12,10 @@ const commands = [
     .setDescription('Publica o actualiza el panel de solicitudes en este canal (oficiales)'),
   new SlashCommandBuilder()
     .setName('apply-aceptar')
-    .setDescription('Acepta la solicitud de un miembro y crea su canal privado de raider')
-    .addUserOption((option) => option.setName('usuario').setDescription('Persona cuya solicitud se acepta').setRequired(true)),
+    .setDescription('Acepta la solicitud del canal actual y crea su canal privado de raider'),
   new SlashCommandBuilder()
     .setName('apply-rechazar')
-    .setDescription('Rechaza una solicitud, avisa al candidato y archiva la transcripción')
-    .addUserOption((option) => option.setName('usuario').setDescription('Persona cuya solicitud se rechaza').setRequired(true))
+    .setDescription('Rechaza la solicitud del canal actual y archiva la transcripción')
     .addStringOption((option) => option.setName('motivo').setDescription('Motivo que se guardará en la transcripción para los oficiales').setMinLength(3).setMaxLength(500).setRequired(true))
 ].map((command) => command.toJSON());
 

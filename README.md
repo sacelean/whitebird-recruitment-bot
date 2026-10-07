@@ -12,9 +12,9 @@ Bot independiente para recibir solicitudes de nuevos reclutas y gestionar el pas
    - experiencia en raids;
    - disponibilidad y motivación para entrar en Whitebird.
 3. Al enviar, se crea `apply-nombre-del-personaje` dentro de la categoría de solicitudes. Solo el candidato, los roles de `OFFICER_ROLE_IDS` y el bot pueden ver y escribir en ese canal. El bot publica un mensaje de recepción configurable, las respuestas y enlaces de perfil EU a Raider.IO y Warcraft Logs construidos con el personaje y reino indicados.
-   En el mensaje principal del apply aparecen los botones **Aceptar** y **Rechazar**; solo los oficiales pueden usarlos. El botón de rechazo abre un formulario que exige el motivo y lo guarda en la transcripción para los oficiales; no se envía al candidato. El comando `/apply-rechazar usuario:@miembro motivo:...` también requiere ese motivo.
-4. Un oficial ejecuta `/apply-aceptar usuario:@miembro` desde el canal privado correspondiente. El bot manda el mensaje de aceptación por DM (o en el canal privado de raider si la persona tiene los DMs cerrados), guarda una transcripción `.txt` en el canal de entrada y elimina el canal de solicitud solo después de que la transcripción se haya publicado correctamente. También crea `raider-personaje-reino` en la categoría de raiders.
-5. Para rechazar, un oficial ejecuta `/apply-rechazar usuario:@miembro motivo:...` en el canal del apply. El bot envía el mensaje de rechazo por DM sin incluir el motivo, archiva la transcripción con el motivo en el canal de entrada y elimina el canal. Si los MD están cerrados, conserva el canal para que el oficial pueda contactar al candidato y volver a intentarlo.
+   En el mensaje principal del apply aparecen los botones **Aceptar** y **Rechazar**; solo los oficiales pueden usarlos. El botón de rechazo abre un formulario que exige el motivo y lo guarda en la transcripción para los oficiales; no se envía al candidato. También están disponibles los comandos dentro del canal de solicitud, sin tener que seleccionar al usuario.
+4. Un oficial ejecuta `/apply-aceptar` desde el canal privado correspondiente. El bot identifica al candidato por el canal, manda el mensaje de aceptación por DM (o en el canal privado de raider si la persona tiene los DMs cerrados), guarda una transcripción `.txt` en el canal de entrada y elimina el canal de solicitud solo después de que la transcripción se haya publicado correctamente. También crea `raider-personaje-reino` en la categoría de raiders.
+5. Para rechazar, un oficial ejecuta `/apply-rechazar motivo:...` en el canal del apply. El bot identifica al candidato por el canal, envía el mensaje de rechazo por DM sin incluir el motivo, archiva la transcripción con el motivo en el canal de entrada y elimina el canal. Si los MD están cerrados, conserva el canal para que el oficial pueda contactar al candidato y volver a intentarlo.
 
 El panel se publica o actualiza con `/apply-panel`. Solo el último panel registrado acepta nuevos formularios. Una persona con una solicitud abierta no puede crear otra hasta que su canal anterior se cierre. Al aceptar o rechazar, la transcripción se guarda en `ENTRY_CHANNEL_ID` y el canal temporal del apply se elimina; al aceptar, el canal privado de raider se conserva.
 
@@ -51,7 +51,7 @@ docker compose up -d --build
 docker compose logs -f bot
 ```
 
-Cuando añadas o cambies comandos, vuelve a ejecutar `docker compose run --rm bot npm run register` para registrarlos en Discord. En esta actualización, hazlo para que Discord aplique el requisito de motivo en `/apply-rechazar`.
+Cuando añadas o cambies comandos, vuelve a ejecutar `docker compose run --rm bot npm run register` para registrarlos en Discord. En esta actualización, hazlo para quitar la opción de usuario de `/apply-aceptar` y `/apply-rechazar`; el bot lo identifica a partir del canal.
 
 La base `data/whitebird-recruitment.sqlite` conserva cuál es el último panel. El archivo `compose.yaml` monta `data/` para mantener esa información aunque se reemplace el contenedor. Para actualizar, haz una copia de `data/` y ejecuta:
 

@@ -62,17 +62,25 @@ function fillTemplate(template, values) {
   return Object.entries(values).reduce((text, [key, value]) => text.split(`{${key}}`).join(String(value)), template);
 }
 
+function getApplicationTopic(channel) {
+  const match = channel?.topic?.match(/^whitebird-apply(?:(-closed|-rejected))?:(\d+):(\d+)$/);
+  if (!match) return null;
+  return { status: match[1] || 'open', guildId: match[2], applicantId: match[3] };
+}
+
 function applicationUserId(interaction) {
-  return interaction.isButton() || interaction.isModalSubmit()
-    ? interaction.customId.split(':').at(-1)
-    : interaction.options.getUser('usuario', true).id;
+  if (interaction.isChatInputCommand()) return getApplicationTopic(interaction.channel)?.applicantId || null;
+  return interaction.customId.split(':').at(-1);
 }
 
 function applicationMismatchReply(interaction, applicantId) {
-  const channelApplicantId = interaction.channel?.topic?.match(/^whitebird-apply(?:-closed|-rejected)?:\d+:(\d+)$/)?.[1];
-  const content = channelApplicantId
-    ? `Este canal está vinculado a <@${channelApplicantId}> (ID \`${channelApplicantId}\`), pero la acción intenta procesar a <@${applicantId}> (ID \`${applicantId}\`). Usa el usuario vinculado o el botón de este apply.`
-    : 'No encuentro en este canal la identificación de una solicitud abierta. Comprueba que estás dentro del canal de apply original y que no se modificó su tema.';
+  const topic = getApplicationTopic(interaction.channel);
+  const validApplicantId = /^\d+$/.test(applicantId || '') ? applicantId : null;
+  const content = topic && validApplicantId === topic.applicantId
+    ? `El candidato coincide (<@${topic.applicantId}>), pero el estado guardado del canal es **${topic.status === '-closed' ? 'cerrado/aceptado' : 'rechazado'}**. Solo se pueden procesar solicitudes abiertas.`
+    : topic && validApplicantId
+      ? `Este canal está vinculado a <@${topic.applicantId}> (ID \`${topic.applicantId}\`), pero la acción intenta procesar a <@${validApplicantId}> (ID \`${validApplicantId}\`).`
+      : 'No encuentro en este canal la identificación de una solicitud válida. Comprueba que estás dentro del canal de apply original y que no se modificó su tema.';
   return interaction.reply({ content, flags: MessageFlags.Ephemeral });
 }
 
@@ -335,11 +343,10 @@ async function acceptApplication(interaction) {
     return interaction.reply({ content: 'Ejecuta `/apply-aceptar` dentro del canal de solicitud correspondiente.', flags: MessageFlags.Ephemeral });
   }
   const applicantId = applicationUserId(interaction);
-  const openTopic = `whitebird-apply:${guildId}:${applicantId}`;
-  const closedTopic = `whitebird-apply-closed:${guildId}:${applicantId}`;
-  const alreadyAccepted = interaction.channel.topic === closedTopic;
-  if (interaction.channel.topic !== openTopic && !alreadyAccepted) {
-    return applicationMismatchReply(interaction, applicantId);
+  const applicationTopic = getApplicationTopic(interaction.channel);
+  const alreadyAccepted = applicationTopic?.status === '-closed';
+  if (!applicantId || applicationTopic?.applicantId !== applicantId || !['open', '-closed'].includes(applicationTopic?.status)) {
+    return applicationMismatchReply(interaction, applicantId || 'desconocido');
   }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -423,11 +430,10 @@ async function rejectApplication(interaction) {
   }
 
   const applicantId = applicationUserId(interaction);
-  const openTopic = `whitebird-apply:${guildId}:${applicantId}`;
-  const rejectedTopic = `whitebird-apply-rejected:${guildId}:${applicantId}`;
-  const alreadyRejected = interaction.channel.topic === rejectedTopic;
-  if (interaction.channel.topic !== openTopic && !alreadyRejected) {
-    return applicationMismatchReply(interaction, applicantId);
+  const applicationTopic = getApplicationTopic(interaction.channel);
+  const alreadyRejected = applicationTopic?.status === '-rejected';
+  if (!applicantId || applicationTopic?.applicantId !== applicantId || !['open', '-rejected'].includes(applicationTopic?.status)) {
+    return applicationMismatchReply(interaction, applicantId || 'desconocido');
   }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
