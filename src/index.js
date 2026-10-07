@@ -32,7 +32,7 @@ const questionLabels = [
   process.env.APPLY_QUESTION_AVAILABILITY || 'Disponibilidad y motivación para unirte'
 ];
 const defaultAcceptedMessage = "¡Enhorabuena, {user}! Tu solicitud ha sido aceptada. Tu canal privado de raider es {channel}.";
-const applyIntroduction = `Hola [👋](https://discord.com/assets/82c4e269c8f910a4.svg) Te cuento un poco cómo funcionamos para que tengas claro qué tipo de guild somos.
+const applyIntroduction = `Hola 👋 Te cuento un poco cómo funcionamos para que tengas claro qué tipo de guild somos.
 
 Somos una guild de gente veterana que disfruta el progreso. Nos gusta avanzar, hacer las cosas bien y notar que cada semana el grupo mejora. No somos de correr sin cabeza, pero tampoco de quedarnos estancados porque «ya caerá».
 
@@ -46,7 +46,7 @@ Pedimos compromiso razonable:
 
 Aquí nadie es perfecto, pero sí pedimos ganas de mejorar. Morimos, aprendemos, ajustamos… y volvemos a tirar. Sin dramas innecesarios ni gritos por voice.
 
-El ambiente es importante para nosotros. Somos competitivos cuando toca, pero también sabemos reírnos cuando el boss decide que hoy no es el día (porque siempre hay un día así [😏](https://discord.com/assets/6f0e7d36849590b1.svg)).
+El ambiente es importante para nosotros. Somos competitivos cuando toca, pero también sabemos reírnos cuando el boss decide que hoy no es el día (porque siempre hay un día así 😏.
 
 Si buscas una guild estable, con rumbo, donde el progreso se disfruta y el grupo suma más que el ego individual, probablemente encajemos.`;
 
