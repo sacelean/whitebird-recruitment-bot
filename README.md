@@ -12,6 +12,7 @@ Bot independiente para recibir solicitudes de nuevos reclutas y gestionar el pas
    - experiencia en raids;
    - disponibilidad y motivación para entrar en Whitebird.
 3. Al enviar, se crea `apply-nombre-del-personaje` dentro de la categoría de solicitudes. Solo el candidato, los roles de `OFFICER_ROLE_IDS` y el bot pueden ver y escribir en ese canal. El bot publica un mensaje de recepción configurable, las respuestas y enlaces de perfil EU a Raider.IO y Warcraft Logs construidos con el personaje y reino indicados.
+   En el mensaje principal del apply aparecen los botones **Aceptar** y **Rechazar**; solo los oficiales pueden usarlos. También siguen disponibles los comandos equivalentes.
 4. Un oficial ejecuta `/apply-aceptar usuario:@miembro` desde el canal privado correspondiente. El bot manda el mensaje de aceptación por DM (o en el canal privado de raider si la persona tiene los DMs cerrados), guarda una transcripción `.txt` en el canal de entrada y elimina el canal de solicitud solo después de que la transcripción se haya publicado correctamente. También crea `raider-personaje-reino` en la categoría de raiders.
 5. Para rechazar, un oficial ejecuta `/apply-rechazar usuario:@miembro` en el canal del apply. Puede añadir el argumento opcional `motivo`; el bot envía el rechazo por DM, archiva la transcripción en el canal de entrada y elimina el canal. Si los MD están cerrados, conserva el canal para que el oficial pueda contactar al candidato y volver a intentarlo.
 

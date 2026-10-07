@@ -62,6 +62,12 @@ function fillTemplate(template, values) {
   return Object.entries(values).reduce((text, [key, value]) => text.split(`{${key}}`).join(String(value)), template);
 }
 
+function applicationUserId(interaction) {
+  return interaction.isButton()
+    ? interaction.customId.split(':')[2]
+    : interaction.options.getUser('usuario', true).id;
+}
+
 async function fetchAllMessages(channel) {
   const messages = [];
   let before;
@@ -283,8 +289,12 @@ async function submitApplication(interaction) {
     server: interaction.guild.name,
     channel: `<#${channel.id}>`
   });
+  const decisionButtons = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`apply:accept:${interaction.user.id}`).setLabel('Aceptar').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`apply:reject:${interaction.user.id}`).setLabel('Rechazar').setStyle(ButtonStyle.Danger)
+  );
   try {
-    await channel.send({ content, embeds: [embed], allowedMentions: { users: [interaction.user.id], roles: [], parse: [] } });
+    await channel.send({ content, embeds: [embed], components: [decisionButtons], allowedMentions: { users: [interaction.user.id], roles: [], parse: [] } });
   } catch (error) {
     await channel.delete('No se pudo publicar el contenido de la solicitud').catch(() => {});
     throw error;
@@ -300,9 +310,9 @@ async function acceptApplication(interaction) {
   if (interaction.channel?.type !== ChannelType.GuildText) {
     return interaction.reply({ content: 'Ejecuta `/apply-aceptar` dentro del canal de solicitud correspondiente.', flags: MessageFlags.Ephemeral });
   }
-  const applicantUser = interaction.options.getUser('usuario', true);
-  const openTopic = `whitebird-apply:${guildId}:${applicantUser.id}`;
-  const closedTopic = `whitebird-apply-closed:${guildId}:${applicantUser.id}`;
+  const applicantId = applicationUserId(interaction);
+  const openTopic = `whitebird-apply:${guildId}:${applicantId}`;
+  const closedTopic = `whitebird-apply-closed:${guildId}:${applicantId}`;
   const alreadyAccepted = interaction.channel.topic === closedTopic;
   if (interaction.channel.topic !== openTopic && !alreadyAccepted) {
     return interaction.reply({ content: 'Este canal no es la solicitud abierta de ese usuario.', flags: MessageFlags.Ephemeral });
@@ -310,7 +320,7 @@ async function acceptApplication(interaction) {
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const guild = interaction.guild;
-  const applicant = await guild.members.fetch(applicantUser.id);
+  const applicant = await guild.members.fetch(applicantId);
   const applicationMessages = await interaction.channel.messages.fetch({ limit: 100 });
   const applicationMessage = applicationMessages.find((message) => message.embeds.some((embed) => embed.title?.startsWith('Apply · ')));
   const applicationEmbed = applicationMessage?.embeds.find((embed) => embed.title?.startsWith('Apply · '));
@@ -388,9 +398,9 @@ async function rejectApplication(interaction) {
     return interaction.reply({ content: 'Ejecuta `/apply-rechazar` dentro del canal de solicitud correspondiente.', flags: MessageFlags.Ephemeral });
   }
 
-  const applicantUser = interaction.options.getUser('usuario', true);
-  const openTopic = `whitebird-apply:${guildId}:${applicantUser.id}`;
-  const rejectedTopic = `whitebird-apply-rejected:${guildId}:${applicantUser.id}`;
+  const applicantId = applicationUserId(interaction);
+  const openTopic = `whitebird-apply:${guildId}:${applicantId}`;
+  const rejectedTopic = `whitebird-apply-rejected:${guildId}:${applicantId}`;
   const alreadyRejected = interaction.channel.topic === rejectedTopic;
   if (interaction.channel.topic !== openTopic && !alreadyRejected) {
     return interaction.reply({ content: 'Este canal no es la solicitud abierta de ese usuario.', flags: MessageFlags.Ephemeral });
@@ -398,7 +408,7 @@ async function rejectApplication(interaction) {
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const guild = interaction.guild;
-  const applicant = await guild.members.fetch(applicantUser.id);
+  const applicant = await guild.members.fetch(applicantId);
   const applicationMessages = await interaction.channel.messages.fetch({ limit: 100 });
   const applicationEmbed = applicationMessages.flatMap((message) => message.embeds)
     .find((embed) => embed.title?.startsWith('Apply · '));
@@ -429,7 +439,7 @@ async function rejectApplication(interaction) {
   const notifyMarker = `rejection-notified:${interaction.channelId}`;
   const wasNotified = alreadyRejected || archiveMessage.content.includes(notifyMarker);
   if (!wasNotified) {
-    const reason = interaction.options.getString('motivo')?.trim() || '';
+    const reason = interaction.isChatInputCommand() ? interaction.options.getString('motivo')?.trim() || '' : '';
     const defaultMessage = `Antes de nada, gracias por el apply y por querer contar con nosotros. Se nota cuando alguien aplica con intención, y eso siempre se agradece.
 
 Lo hemos revisado con calma, pero en este momento no podemos incorporarte en el roster. La decisión no es personal; con la composición actual no vemos que podamos incluirte en la raid.
@@ -479,6 +489,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return interaction.reply({ content: 'Este panel ya no está activo. Usa el botón del panel más reciente.', flags: MessageFlags.Ephemeral });
       }
       return interaction.showModal(applyModal());
+    }
+
+    if (interaction.isButton() && /^apply:(accept|reject):\d+$/.test(interaction.customId)) {
+      if (interaction.customId.startsWith('apply:accept:')) return await acceptApplication(interaction);
+      return await rejectApplication(interaction);
     }
 
     if (interaction.isModalSubmit() && interaction.customId === 'apply:submit') return await submitApplication(interaction);
