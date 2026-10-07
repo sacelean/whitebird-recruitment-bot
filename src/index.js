@@ -63,9 +63,19 @@ function fillTemplate(template, values) {
 }
 
 function applicationUserId(interaction) {
-  return interaction.isButton() || interaction.isModalSubmit()
-    ? interaction.customId.split(':').at(-1)
-    : interaction.options.getUser('usuario', true).id;
+  if (interaction.isButton() || interaction.isModalSubmit()) {
+    const channelApplicantId = interaction.channel?.topic?.match(/^whitebird-apply:\d+:(\d+)$/)?.[1];
+    return channelApplicantId || interaction.customId.split(':').at(-1);
+  }
+  return interaction.options.getUser('usuario', true).id;
+}
+
+function applicationMismatchReply(interaction, applicantId) {
+  const channelApplicantId = interaction.channel?.topic?.match(/^whitebird-apply(?:-closed|-rejected)?:\d+:(\d+)$/)?.[1];
+  const content = channelApplicantId
+    ? `Este canal está vinculado a <@${channelApplicantId}>, pero la acción intenta procesar a <@${applicantId}>. Usa el usuario vinculado o el botón de este apply.`
+    : 'No encuentro en este canal la identificación de una solicitud abierta. Comprueba que estás dentro del canal de apply original y que no se modificó su tema.';
+  return interaction.reply({ content, flags: MessageFlags.Ephemeral });
 }
 
 function rejectionReasonModal(applicantId) {
@@ -331,7 +341,7 @@ async function acceptApplication(interaction) {
   const closedTopic = `whitebird-apply-closed:${guildId}:${applicantId}`;
   const alreadyAccepted = interaction.channel.topic === closedTopic;
   if (interaction.channel.topic !== openTopic && !alreadyAccepted) {
-    return interaction.reply({ content: 'Este canal no es la solicitud abierta de ese usuario.', flags: MessageFlags.Ephemeral });
+    return applicationMismatchReply(interaction, applicantId);
   }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -419,7 +429,7 @@ async function rejectApplication(interaction) {
   const rejectedTopic = `whitebird-apply-rejected:${guildId}:${applicantId}`;
   const alreadyRejected = interaction.channel.topic === rejectedTopic;
   if (interaction.channel.topic !== openTopic && !alreadyRejected) {
-    return interaction.reply({ content: 'Este canal no es la solicitud abierta de ese usuario.', flags: MessageFlags.Ephemeral });
+    return applicationMismatchReply(interaction, applicantId);
   }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
