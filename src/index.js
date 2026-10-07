@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import {
+  AttachmentBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -30,6 +31,17 @@ const questionLabels = [
   process.env.APPLY_QUESTION_EXPERIENCE || 'Experiencia en raids',
   process.env.APPLY_QUESTION_AVAILABILITY || 'Disponibilidad y motivación para unirte'
 ];
+const defaultAcceptedMessage = `Bienvenido/a! [👋](https://discord.com/assets/82c4e269c8f910a4.svg)[⚔️](https://discord.com/assets/fa2c28d64be33d41.svg) Hemos revisado tu apply y quedas aceptado/a como miembro en rango Recluta. A partir de ahora entras en periodo de prueba con nosotros. Esto significa básicamente que vamos a conocernos en raid: ver cómo encajas con el grupo, tu actitud, ejecución y compromiso… y que tú también puedas valorar si esta es la guild que buscas.
+
+Como recluta esperamos:
+• Asistencia avisada y compromiso con los días de raid
+• Personaje preparado (encantamientos, consumibles, etc.)
+• Conocer las mecánicas antes de cada boss
+• Buena actitud en progreso (aquí morimos, pero aprendemos)
+
+Durante este periodo no buscamos perfección, buscamos implicación y capacidad de mejora. Somos una guild veterana que disfruta el progreso, así que valoramos más la constancia y el trabajo en equipo que el ego individual. Si todo fluye como esperamos, el ascenso a Raider llegará de forma natural.
+
+Cualquier duda que tengas, puedes hablar directamente con oficiales. Nos vemos en raid — y tranquilo/a, todos hemos sido reclutas alguna vez [😉](https://discord.com/assets/4742013cbe7dbca0.svg)[⚔️](https://discord.com/assets/fa2c28d64be33d41.svg)`;
 
 function isOfficer(interaction) {
   if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) return true;
@@ -43,6 +55,61 @@ function unauthorizedReply() {
 
 function fillTemplate(template, values) {
   return Object.entries(values).reduce((text, [key, value]) => text.split(`{${key}}`).join(String(value)), template);
+}
+
+async function fetchAllMessages(channel) {
+  const messages = [];
+  let before;
+  while (true) {
+    const batch = await channel.messages.fetch({ limit: 100, ...(before ? { before } : {}) });
+    if (!batch.size) break;
+    messages.push(...batch.values());
+    if (batch.size < 100) break;
+    before = batch.last().id;
+  }
+  return messages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+}
+
+function renderTranscript(messages, { applicant, character, realm, acceptedBy }) {
+  const lines = [
+    'TRANSCRIPCIÓN DE SOLICITUD WHITEBIRD',
+    `Candidato: ${applicant.user.tag} (${applicant.id})`,
+    `Personaje: ${character}`,
+    `Reino: ${realm}`,
+    `Aceptado por: ${acceptedBy.tag} (${acceptedBy.id})`,
+    `Fecha de aceptación: ${new Date().toISOString()}`,
+    '',
+    'HISTORIAL DEL CANAL',
+    ''
+  ];
+  for (const message of messages) {
+    lines.push(`[${new Date(message.createdTimestamp).toISOString()}] ${message.author.tag} (${message.author.id})`);
+    if (message.content) lines.push(message.content);
+    for (const embed of message.embeds) {
+      if (embed.title) lines.push(`Título: ${embed.title}`);
+      if (embed.description) lines.push(embed.description);
+      for (const field of embed.fields) lines.push(`${field.name}: ${field.value}`);
+    }
+    for (const attachment of message.attachments.values()) lines.push(`Adjunto: ${attachment.name} — ${attachment.url}`);
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+async function findEntryChannel(guild) {
+  const entryChannelId = process.env.ENTRY_CHANNEL_ID;
+  if (!entryChannelId) throw new Error('Falta ENTRY_CHANNEL_ID en .env.');
+  const channel = await guild.channels.fetch(entryChannelId);
+  if (!channel || channel.type !== ChannelType.GuildText) throw new Error('ENTRY_CHANNEL_ID debe ser un canal de texto de este servidor.');
+  const botMember = await guild.members.fetchMe();
+  const permissions = channel.permissionsFor(botMember);
+  const canArchive = permissions
+    && permissions.has(PermissionFlagsBits.ViewChannel)
+    && permissions.has(PermissionFlagsBits.SendMessages)
+    && permissions.has(PermissionFlagsBits.ReadMessageHistory)
+    && permissions.has(PermissionFlagsBits.AttachFiles);
+  if (!canArchive) throw new Error('El bot necesita Ver canales, Enviar mensajes, Leer historial y Adjuntar archivos en el canal de entrada.');
+  return channel;
 }
 
 function applyPanelPayload() {
@@ -79,6 +146,11 @@ function applyModal() {
 function cleanChannelName(value) {
   return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'recluta';
+}
+
+function wowRealmSlug(value) {
+  return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/['’]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
 async function getPrivateChannelSetup(guild, categoryEnvName) {
@@ -161,7 +233,19 @@ async function submitApplication(interaction) {
     .setColor(0x5865f2)
     .setTitle(`Apply · ${values.character}`)
     .setDescription(`Solicitud enviada por <@${interaction.user.id}>`)
-    .addFields(answers.map((value, index) => ({ name: questionLabels[index].slice(0, 256), value: value.slice(0, 1024) })));
+    .addFields([
+      ...answers.map((value, index) => ({ name: questionLabels[index].slice(0, 256), value: value.slice(0, 1024) })),
+      {
+        name: 'Raider.IO',
+        value: `[Ver perfil EU](https://raider.io/characters/eu/${encodeURIComponent(wowRealmSlug(values.realm))}/${encodeURIComponent(values.character)})`,
+        inline: true
+      },
+      {
+        name: 'Warcraft Logs',
+        value: `[Ver perfil EU](https://www.warcraftlogs.com/character/eu/${encodeURIComponent(wowRealmSlug(values.realm))}/${encodeURIComponent(values.character)})`,
+        inline: true
+      }
+    ]);
   const template = process.env.APPLY_RECEIVED_MESSAGE || '¡Hola {user}! Hemos recibido tu apply para **{character}** · **{realm}**. Los oficiales de Whitebird lo revisarán aquí.';
   const content = fillTemplate(template, {
     user: `<@${interaction.user.id}>`,
@@ -181,15 +265,17 @@ async function submitApplication(interaction) {
 
 async function acceptApplication(interaction) {
   if (!isOfficer(interaction)) return interaction.reply(unauthorizedReply());
-  if (!interaction.appPermissions?.has(PermissionFlagsBits.ManageChannels) || !interaction.appPermissions?.has(PermissionFlagsBits.ManageRoles)) {
-    return interaction.reply({ content: 'El bot necesita **Gestionar canales** y **Gestionar roles** para completar la aceptación y cerrar el apply.', flags: MessageFlags.Ephemeral });
+  if (!interaction.appPermissions?.has(PermissionFlagsBits.ManageChannels)) {
+    return interaction.reply({ content: 'El bot necesita **Gestionar canales** para completar la aceptación.', flags: MessageFlags.Ephemeral });
   }
   if (interaction.channel?.type !== ChannelType.GuildText) {
     return interaction.reply({ content: 'Ejecuta `/apply-aceptar` dentro del canal de solicitud correspondiente.', flags: MessageFlags.Ephemeral });
   }
   const applicantUser = interaction.options.getUser('usuario', true);
   const openTopic = `whitebird-apply:${guildId}:${applicantUser.id}`;
-  if (interaction.channel.topic !== openTopic) {
+  const closedTopic = `whitebird-apply-closed:${guildId}:${applicantUser.id}`;
+  const alreadyAccepted = interaction.channel.topic === closedTopic;
+  if (interaction.channel.topic !== openTopic && !alreadyAccepted) {
     return interaction.reply({ content: 'Este canal no es la solicitud abierta de ese usuario.', flags: MessageFlags.Ephemeral });
   }
 
@@ -202,6 +288,15 @@ async function acceptApplication(interaction) {
   const character = applicationEmbed?.title?.slice('Apply · '.length).trim() || applicant.displayName;
   const realm = applicationEmbed?.fields?.find((field) => field.name === questionLabels[1].slice(0, 256))?.value?.trim() || 'reino';
   const raiderChannelName = `raider-${cleanChannelName(character)}-${cleanChannelName(realm)}`.slice(0, 100);
+  let entryChannel;
+  try {
+    entryChannel = await findEntryChannel(guild);
+  } catch (error) {
+    return interaction.editReply(`No puedo archivar la solicitud: ${error.message}`);
+  }
+  const archiveMarker = `apply-transcript:${interaction.channelId}`;
+  const archiveMessages = await entryChannel.messages.fetch({ limit: 100 });
+  let archiveMessage = archiveMessages.find((message) => message.content.includes(archiveMarker));
   const { category, roles, botMember } = await getPrivateChannelSetup(guild, 'RAIDER_CATEGORY_ID');
   const raiderTopic = `whitebird-raider:${guildId}:${applicant.id}`;
   let raiderChannel = guild.channels.cache.find((channel) => channel.type === ChannelType.GuildText && channel.topic === raiderTopic);
@@ -218,31 +313,41 @@ async function acceptApplication(interaction) {
     await raiderChannel.setName(raiderChannelName, 'Nombre actualizado al personaje y reino de la solicitud');
   }
 
-  const template = process.env.APPLY_ACCEPTED_MESSAGE || '¡Enhorabuena, {user}! Tu solicitud ha sido aceptada. Tu canal privado de raider es {channel}.';
-  const message = fillTemplate(template, {
-    user: `<@${applicant.id}>`,
-    character,
-    realm,
-    server: guild.name,
-    channel: `<#${raiderChannel.id}>`
-  });
-  let delivery = 'mensaje directo';
-  try {
-    await applicant.send({ content: message, allowedMentions: { users: [applicant.id], roles: [], parse: [] } });
-  } catch {
-    delivery = 'canal de solicitud';
-    await interaction.channel.send({ content: message, allowedMentions: { users: [applicant.id], roles: [], parse: [] } });
+  if (!archiveMessage) {
+    const transcriptMessages = await fetchAllMessages(interaction.channel);
+    const transcript = renderTranscript(transcriptMessages, { applicant, character, realm, acceptedBy: interaction.user });
+    const filename = `apply-${cleanChannelName(character)}-${cleanChannelName(realm)}-transcripcion.txt`.slice(0, 120);
+    archiveMessage = await entryChannel.send({
+      content: `Solicitud aceptada · ${character} · ${realm}\nCandidato: ${applicant.user.tag}\nPersonaje: ${character} · ${realm}\nOficial: ${interaction.user.tag}\nCanal archivado: ${interaction.channel.name}\n${archiveMarker}`,
+      files: [new AttachmentBuilder(Buffer.from(transcript, 'utf8'), { name: filename })],
+      allowedMentions: { parse: [] }
+    });
   }
 
-  await interaction.channel.permissionOverwrites.edit(applicant.id, {
-    SendMessages: false,
-    SendMessagesInThreads: false,
-    CreatePublicThreads: false,
-    CreatePrivateThreads: false,
-    AddReactions: false
-  }, { reason: `Solicitud aceptada; canal cerrado por ${interaction.user.tag}` });
-  await interaction.channel.setTopic(`whitebird-apply-closed:${guildId}:${applicant.id}`);
-  return interaction.editReply(`Solicitud aceptada. Mensaje enviado por ${delivery}; canal de solicitud cerrado y canal de raider creado: ${raiderChannel}.`);
+  const notifyMarker = `acceptance-notified:${interaction.channelId}`;
+  const wasNotified = alreadyAccepted || archiveMessage.content.includes(notifyMarker);
+  let delivery = 'mensaje directo';
+  if (!wasNotified) {
+    const template = process.env.APPLY_ACCEPTED_MESSAGE || defaultAcceptedMessage;
+    const message = fillTemplate(template, {
+      user: `<@${applicant.id}>`,
+      character,
+      realm,
+      server: guild.name,
+      channel: `<#${raiderChannel.id}>`
+    });
+    try {
+      await applicant.send({ content: message, allowedMentions: { users: [applicant.id], roles: [], parse: [] } });
+    } catch {
+      delivery = 'canal de raider';
+      await raiderChannel.send({ content: message, allowedMentions: { users: [applicant.id], roles: [], parse: [] } });
+    }
+    archiveMessage = await archiveMessage.edit({ content: `${archiveMessage.content}\n${notifyMarker}` });
+  }
+
+  await interaction.channel.delete(`Apply archivado en ${entryChannel.name}; solicitud aceptada por ${interaction.user.tag}`);
+  const deliveryText = wasNotified ? 'La bienvenida ya se había enviado.' : `Mensaje enviado por ${delivery}.`;
+  return interaction.editReply(`Solicitud aceptada. ${deliveryText} Transcripción guardada en ${entryChannel} y canal de apply eliminado. Canal de raider: ${raiderChannel}.`);
 }
 
 client.once(Events.ClientReady, (readyClient) => {
