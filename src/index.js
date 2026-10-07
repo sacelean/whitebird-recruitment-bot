@@ -63,21 +63,13 @@ function fillTemplate(template, values) {
 }
 
 function applicationUserId(interaction) {
-  if (interaction.isButton() || interaction.isModalSubmit()) {
-    const channelApplicantId = interaction.channel?.topic?.match(/^whitebird-apply:\d+:(\d+)$/)?.[1];
-    return channelApplicantId || interaction.customId.split(':').at(-1);
-  }
-  return interaction.options.getUser('usuario', true).id;
-}
-
-function parseApplicationTopic(channel) {
-  const match = channel?.topic?.match(/^whitebird-apply(?:(-closed|-rejected))?:(\d+):(\d+)$/);
-  if (!match) return null;
-  return { status: match[1] || 'open', guildId: match[2], applicantId: match[3] };
+  return interaction.isButton() || interaction.isModalSubmit()
+    ? interaction.customId.split(':').at(-1)
+    : interaction.options.getUser('usuario', true).id;
 }
 
 function applicationMismatchReply(interaction, applicantId) {
-  const channelApplicantId = parseApplicationTopic(interaction.channel)?.applicantId;
+  const channelApplicantId = interaction.channel?.topic?.match(/^whitebird-apply(?:-closed|-rejected)?:\d+:(\d+)$/)?.[1];
   const content = channelApplicantId
     ? `Este canal está vinculado a <@${channelApplicantId}> (ID \`${channelApplicantId}\`), pero la acción intenta procesar a <@${applicantId}> (ID \`${applicantId}\`). Usa el usuario vinculado o el botón de este apply.`
     : 'No encuentro en este canal la identificación de una solicitud abierta. Comprueba que estás dentro del canal de apply original y que no se modificó su tema.';
@@ -343,9 +335,10 @@ async function acceptApplication(interaction) {
     return interaction.reply({ content: 'Ejecuta `/apply-aceptar` dentro del canal de solicitud correspondiente.', flags: MessageFlags.Ephemeral });
   }
   const applicantId = applicationUserId(interaction);
-  const applicationTopic = parseApplicationTopic(interaction.channel);
-  const alreadyAccepted = applicationTopic?.status === '-closed';
-  if (applicationTopic?.applicantId !== applicantId || !['open', '-closed'].includes(applicationTopic?.status)) {
+  const openTopic = `whitebird-apply:${guildId}:${applicantId}`;
+  const closedTopic = `whitebird-apply-closed:${guildId}:${applicantId}`;
+  const alreadyAccepted = interaction.channel.topic === closedTopic;
+  if (interaction.channel.topic !== openTopic && !alreadyAccepted) {
     return applicationMismatchReply(interaction, applicantId);
   }
 
@@ -430,9 +423,10 @@ async function rejectApplication(interaction) {
   }
 
   const applicantId = applicationUserId(interaction);
-  const applicationTopic = parseApplicationTopic(interaction.channel);
-  const alreadyRejected = applicationTopic?.status === '-rejected';
-  if (applicationTopic?.applicantId !== applicantId || !['open', '-rejected'].includes(applicationTopic?.status)) {
+  const openTopic = `whitebird-apply:${guildId}:${applicantId}`;
+  const rejectedTopic = `whitebird-apply-rejected:${guildId}:${applicantId}`;
+  const alreadyRejected = interaction.channel.topic === rejectedTopic;
+  if (interaction.channel.topic !== openTopic && !alreadyRejected) {
     return applicationMismatchReply(interaction, applicantId);
   }
 
