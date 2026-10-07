@@ -410,8 +410,11 @@ async function rejectApplication(interaction) {
   const guild = interaction.guild;
   const applicant = await guild.members.fetch(applicantId);
   const applicationMessages = await interaction.channel.messages.fetch({ limit: 100 });
-  const applicationEmbed = applicationMessages.flatMap((message) => message.embeds)
-    .find((embed) => embed.title?.startsWith('Apply · '));
+  let applicationEmbed;
+  for (const message of applicationMessages.values()) {
+    applicationEmbed = message.embeds.find((embed) => embed.title?.startsWith('Apply · '));
+    if (applicationEmbed) break;
+  }
   const character = applicationEmbed?.title?.slice('Apply · '.length).trim() || applicant.displayName;
   const realm = applicationEmbed?.fields?.find((field) => field.name === questionLabels[1].slice(0, 256))?.value?.trim() || 'reino';
 
