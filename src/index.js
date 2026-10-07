@@ -31,17 +31,24 @@ const questionLabels = [
   process.env.APPLY_QUESTION_EXPERIENCE || 'Experiencia en raids',
   process.env.APPLY_QUESTION_AVAILABILITY || 'Disponibilidad y motivación para unirte'
 ];
-const defaultAcceptedMessage = `Bienvenido/a! [👋](https://discord.com/assets/82c4e269c8f910a4.svg)[⚔️](https://discord.com/assets/fa2c28d64be33d41.svg) Hemos revisado tu apply y quedas aceptado/a como miembro en rango Recluta. A partir de ahora entras en periodo de prueba con nosotros. Esto significa básicamente que vamos a conocernos en raid: ver cómo encajas con el grupo, tu actitud, ejecución y compromiso… y que tú también puedas valorar si esta es la guild que buscas.
+const defaultAcceptedMessage = "¡Enhorabuena, {user}! Tu solicitud ha sido aceptada. Tu canal privado de raider es {channel}.";
+const applyIntroduction = `Hola [👋](https://discord.com/assets/82c4e269c8f910a4.svg) Te cuento un poco cómo funcionamos para que tengas claro qué tipo de guild somos.
 
-Como recluta esperamos:
-• Asistencia avisada y compromiso con los días de raid
-• Personaje preparado (encantamientos, consumibles, etc.)
-• Conocer las mecánicas antes de cada boss
-• Buena actitud en progreso (aquí morimos, pero aprendemos)
+Somos una guild de gente veterana que disfruta el progreso. Nos gusta avanzar, hacer las cosas bien y notar que cada semana el grupo mejora. No somos de correr sin cabeza, pero tampoco de quedarnos estancados porque «ya caerá».
 
-Durante este periodo no buscamos perfección, buscamos implicación y capacidad de mejora. Somos una guild veterana que disfruta el progreso, así que valoramos más la constancia y el trabajo en equipo que el ego individual. Si todo fluye como esperamos, el ascenso a Raider llegará de forma natural.
+Tenemos estructura clara (RL compartido, oficiales de roster, heal lead), organización previa con guías y planificación, y comunicación directa con oficiales. El loot es gestionado con RCLootCouncil y la asistencia con WoWAudit. Nos gusta que las cosas estén ordenadas para que dentro de raid podamos centrarnos en jugar.
 
-Cualquier duda que tengas, puedes hablar directamente con oficiales. Nos vemos en raid — y tranquilo/a, todos hemos sido reclutas alguna vez [😉](https://discord.com/assets/4742013cbe7dbca0.svg)[⚔️](https://discord.com/assets/fa2c28d64be33d41.svg)`;
+Pedimos compromiso razonable:
+• Avisar asistencias
+• Venir preparado
+• Conocer las mecánicas
+• Y, sobre todo, buena actitud
+
+Aquí nadie es perfecto, pero sí pedimos ganas de mejorar. Morimos, aprendemos, ajustamos… y volvemos a tirar. Sin dramas innecesarios ni gritos por voice.
+
+El ambiente es importante para nosotros. Somos competitivos cuando toca, pero también sabemos reírnos cuando el boss decide que hoy no es el día (porque siempre hay un día así [😏](https://discord.com/assets/6f0e7d36849590b1.svg)).
+
+Si buscas una guild estable, con rumbo, donde el progreso se disfruta y el grupo suma más que el ego individual, probablemente encajemos.`;
 
 function isOfficer(interaction) {
   if (interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) return true;
@@ -189,21 +196,35 @@ async function publishApplyPanel(interaction) {
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const previous = getPanel(guildId);
-  if (previous?.channel_id === interaction.channelId) {
-    const oldMessage = await interaction.channel.messages.fetch({ message: previous.message_id, force: true }).catch(() => null);
-    if (oldMessage) {
-      try {
-        await oldMessage.edit(applyPanelPayload());
-        return interaction.editReply('He actualizado el panel de applies en este canal.');
-      } catch (error) {
-        if (error?.code !== 10008) throw error;
-        console.warn(`El panel guardado ${previous.message_id} ya no existe; se publicará uno nuevo.`);
-      }
+  const oldMessage = previous?.channel_id === interaction.channelId
+    ? await interaction.channel.messages.fetch({ message: previous.message_id, force: true }).catch(() => null)
+    : null;
+  const introMarker = `||whitebird-apply-intro:${guildId}||`;
+  const recentMessages = await interaction.channel.messages.fetch({ limit: 100 });
+  let introMessage = recentMessages.find((message) => message.author.id === interaction.client.user.id && message.content.includes(introMarker));
+  const introContent = `${applyIntroduction}\n\n${introMarker}`;
+
+  if (oldMessage && introMessage && introMessage.createdTimestamp < oldMessage.createdTimestamp) {
+    await introMessage.edit(introContent);
+    try {
+      await oldMessage.edit(applyPanelPayload());
+      return interaction.editReply('He actualizado la introducción y el panel de applies en este canal.');
+    } catch (error) {
+      if (error?.code !== 10008) throw error;
+      console.warn(`El panel guardado ${previous.message_id} ya no existe; se publicará uno nuevo.`);
     }
+  } else if (oldMessage) {
+    await oldMessage.delete();
+  }
+
+  if (introMessage) {
+    await introMessage.edit(introContent);
+  } else {
+    introMessage = await interaction.channel.send({ content: introContent, allowedMentions: { parse: [] } });
   }
   const message = await interaction.channel.send(applyPanelPayload());
   savePanel(guildId, interaction.channelId, message.id);
-  return interaction.editReply(`Panel de applies publicado en ${interaction.channel}.`);
+  return interaction.editReply(`Introducción y panel de applies publicados en ${interaction.channel}.`);
 }
 
 async function submitApplication(interaction) {

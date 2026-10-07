@@ -4,7 +4,7 @@ Bot independiente para recibir solicitudes de nuevos reclutas y gestionar el pas
 
 ## Flujo de solicitud
 
-1. Un oficial usa `/apply-panel` dentro del canal donde quiere publicar el panel.
+1. Un oficial usa `/apply-panel` dentro del canal donde quiere publicar el panel. El bot publica el mensaje introductorio y justo debajo el panel; si se vuelve a ejecutar el comando, actualiza esos mensajes sin duplicarlos.
 2. El panel muestra el botón **New Apply**. Al pulsarlo, el candidato rellena un formulario privado con cinco respuestas obligatorias:
    - personaje principal;
    - reino;
