@@ -482,11 +482,10 @@ Preferimos ser sinceros desde el principio antes que hacerte entrar sin tenerlo 
 
 Aun así, gracias por el interés y por el tiempo que te has tomado. Si más adelante la situación cambia o volvemos a abrir hueco que encaje mejor con tu perfil, podemos volver a hablar sin problema.
 
-Te deseamos que encuentres un grupo donde te sientas cómodo y puedas disfrutar del progreso como toca [⚔️](https://discord.com/assets/fa2c28d64be33d41.svg)
+Te deseamos que encuentres un grupo donde te sientas cómodo y puedas disfrutar del progreso como toca ⚔️
 
-Un saludo y suerte. [💪](https://discord.com/assets/6550bf7986e6b411.svg)
+Un saludo y suerte. 💪`;
 
-{reason}`;
     const template = process.env.APPLY_REJECTED_MESSAGE || defaultMessage;
     const reasonText = `Nota: ${reason}`;
     const filledMessage = fillTemplate(template, {
