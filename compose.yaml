@@ -5,5 +5,12 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      WOW_ROLE_SYNC_DATABASE_PATH: /app/wow-role-sync-data/whitebird-wow-roles.sqlite
     volumes:
       - ./data:/app/data
+      - type: bind
+        source: ${WOW_ROLE_SYNC_DATA_DIR:?Configura WOW_ROLE_SYNC_DATA_DIR en .env con la carpeta data del bot de sync}
+        target: /app/wow-role-sync-data
+        bind:
+          create_host_path: false

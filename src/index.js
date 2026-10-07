@@ -16,6 +16,7 @@ import {
   TextInputStyle
 } from 'discord.js';
 import { getPanel, savePanel } from './database.js';
+import { saveWowLink } from './wow-links.js';
 
 const token = process.env.DISCORD_TOKEN;
 const guildId = process.env.DISCORD_GUILD_ID;
@@ -462,6 +463,9 @@ async function acceptApplication(interaction) {
   }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  if (!process.env.WOW_ROLE_SYNC_DATABASE_PATH) {
+    return interaction.editReply('No puedo completar la aceptación: falta configurar el acceso compartido a la base del bot de sync (`WOW_ROLE_SYNC_DATABASE_PATH`).');
+  }
   const guild = interaction.guild;
   const applicant = await guild.members.fetch(applicantId);
   const applicationMessages = await interaction.channel.messages.fetch({ limit: 100 });
@@ -469,6 +473,9 @@ async function acceptApplication(interaction) {
   const applicationEmbed = applicationMessage?.embeds.find((embed) => embed.title?.startsWith('Apply · '));
   const character = applicationEmbed?.title?.slice('Apply · '.length).trim() || applicant.displayName;
   const realm = applicationEmbed?.fields?.find((field) => field.name === questionLabels[1].slice(0, 256))?.value?.trim() || 'reino';
+  if (!applicationEmbed || !character || !realm || realm === 'reino') {
+    return interaction.editReply('No puedo vincular el main porque la ficha no contiene un personaje y reino válidos. Usa `/apply-corregir` y vuelve a aceptar.');
+  }
   const raiderChannelName = `raider-${cleanChannelName(character)}-${cleanChannelName(realm)}`.slice(0, 100);
   let entryChannel;
   try {
@@ -550,9 +557,16 @@ https://discord.com/channels/1463652921898963146/1463652923253719247`;
     archiveMessage = await archiveMessage.edit({ content: `${archiveMessage.content}\n${notifyMarker}` });
   }
 
+  try {
+    saveWowLink(guildId, applicant.id, character, wowRealmSlug(realm));
+  } catch (error) {
+    console.error(`No se pudo vincular ${applicant.id} con ${character}-${realm}:`, error);
+    return interaction.editReply(`La bienvenida y la transcripción están guardadas, pero no pude registrar el main en el bot de sync. El canal de apply sigue abierto para que puedas corregir la configuración y reintentar. Detalle: ${error.message}`);
+  }
+
   await interaction.channel.delete(`Apply archivado en ${entryChannel.name}; solicitud aceptada por ${interaction.user.tag}`);
   const deliveryText = wasNotified ? 'La bienvenida ya se había enviado.' : `Mensaje enviado por ${delivery}.`;
-  return interaction.editReply(`Solicitud aceptada. ${deliveryText} Transcripción guardada en ${entryChannel} y canal de apply eliminado. Canal de raider: ${raiderChannel}.`);
+  return interaction.editReply(`Solicitud aceptada. ${deliveryText} Main **${character} · ${realm}** vinculado para sincronizar roles. Transcripción guardada en ${entryChannel} y canal de apply eliminado. Canal de raider: ${raiderChannel}.`);
 }
 
 async function rejectApplication(interaction) {
