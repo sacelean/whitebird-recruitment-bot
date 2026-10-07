@@ -18,7 +18,7 @@ const commands = [
     .setName('apply-rechazar')
     .setDescription('Rechaza una solicitud, avisa al candidato y archiva la transcripción')
     .addUserOption((option) => option.setName('usuario').setDescription('Persona cuya solicitud se rechaza').setRequired(true))
-    .addStringOption((option) => option.setName('motivo').setDescription('Motivo opcional que se incluirá en el mensaje al candidato').setMaxLength(500))
+    .addStringOption((option) => option.setName('motivo').setDescription('Motivo que se incluirá en la transcripción y el mensaje al candidato').setMinLength(3).setMaxLength(500).setRequired(true))
 ].map((command) => command.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(token);

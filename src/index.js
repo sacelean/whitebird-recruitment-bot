@@ -63,9 +63,24 @@ function fillTemplate(template, values) {
 }
 
 function applicationUserId(interaction) {
-  return interaction.isButton()
-    ? interaction.customId.split(':')[2]
+  return interaction.isButton() || interaction.isModalSubmit()
+    ? interaction.customId.split(':').at(-1)
     : interaction.options.getUser('usuario', true).id;
+}
+
+function rejectionReasonModal(applicantId) {
+  const reasonInput = new TextInputBuilder()
+    .setCustomId('reason')
+    .setLabel('Motivo del rechazo')
+    .setStyle(TextInputStyle.Paragraph)
+    .setMinLength(3)
+    .setMaxLength(500)
+    .setRequired(true)
+    .setPlaceholder('Explica brevemente la decisión para incluirla en la transcripción.');
+  return new ModalBuilder()
+    .setCustomId(`apply:reject-reason:${applicantId}`)
+    .setTitle('Rechazar solicitud')
+    .addComponents(new ActionRowBuilder().addComponents(reasonInput));
 }
 
 async function fetchAllMessages(channel) {
@@ -81,7 +96,7 @@ async function fetchAllMessages(channel) {
   return messages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
 }
 
-function renderTranscript(messages, { applicant, character, realm, resolvedBy, outcome }) {
+function renderTranscript(messages, { applicant, character, realm, resolvedBy, outcome, reason }) {
   const lines = [
     'TRANSCRIPCIÓN DE SOLICITUD WHITEBIRD',
     `Candidato: ${applicant.user.tag} (${applicant.id})`,
@@ -89,6 +104,7 @@ function renderTranscript(messages, { applicant, character, realm, resolvedBy, o
     `Reino: ${realm}`,
     `${outcome} por: ${resolvedBy.tag} (${resolvedBy.id})`,
     `Fecha de ${outcome.toLowerCase()}: ${new Date().toISOString()}`,
+    ...(reason ? [`Motivo del rechazo: ${reason}`] : []),
     '',
     'HISTORIAL DEL CANAL',
     ''
@@ -408,6 +424,10 @@ async function rejectApplication(interaction) {
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const guild = interaction.guild;
+  const reason = interaction.isChatInputCommand()
+    ? interaction.options.getString('motivo', true).trim()
+    : interaction.fields.getTextInputValue('reason').trim();
+  if (reason.length < 3) return interaction.editReply('Indica un motivo de al menos 3 caracteres.');
   const applicant = await guild.members.fetch(applicantId);
   const applicationMessages = await interaction.channel.messages.fetch({ limit: 100 });
   let applicationEmbed;
@@ -428,12 +448,24 @@ async function rejectApplication(interaction) {
   const archiveMarker = `apply-rejected-transcript:${interaction.channelId}`;
   const archiveMessages = await entryChannel.messages.fetch({ limit: 100 });
   let archiveMessage = archiveMessages.find((message) => message.content.includes(archiveMarker));
+  const filename = `apply-${cleanChannelName(character)}-${cleanChannelName(realm)}-transcripcion.txt`.slice(0, 120);
   if (!archiveMessage) {
     const transcriptMessages = await fetchAllMessages(interaction.channel);
-    const transcript = renderTranscript(transcriptMessages, { applicant, character, realm, resolvedBy: interaction.user, outcome: 'Rechazado' });
-    const filename = `apply-${cleanChannelName(character)}-${cleanChannelName(realm)}-transcripcion.txt`.slice(0, 120);
+    const transcript = renderTranscript(transcriptMessages, { applicant, character, realm, resolvedBy: interaction.user, outcome: 'Rechazado', reason });
     archiveMessage = await entryChannel.send({
-      content: `Solicitud rechazada · ${character} · ${realm}\nCandidato: ${applicant.user.tag}\nPersonaje: ${character} · ${realm}\nOficial: ${interaction.user.tag}\nCanal archivado: ${interaction.channel.name}\n${archiveMarker}`,
+      content: `Solicitud rechazada · ${character} · ${realm}\nCandidato: ${applicant.user.tag}\nPersonaje: ${character} · ${realm}\nOficial: ${interaction.user.tag}\nMotivo: ${reason}\nCanal archivado: ${interaction.channel.name}\n${archiveMarker}`,
+      files: [new AttachmentBuilder(Buffer.from(transcript, 'utf8'), { name: filename })],
+      allowedMentions: { parse: [] }
+    });
+  } else if (!archiveMessage.content.includes(`Motivo: ${reason}`)) {
+    const transcriptMessages = await fetchAllMessages(interaction.channel);
+    const transcript = renderTranscript(transcriptMessages, { applicant, character, realm, resolvedBy: interaction.user, outcome: 'Rechazado', reason });
+    const updatedContent = archiveMessage.content
+      .replace(/\nMotivo: [^\n]*/g, '')
+      .replace(`\n${archiveMarker}`, `\nMotivo: ${reason}\n${archiveMarker}`);
+    archiveMessage = await archiveMessage.edit({
+      content: updatedContent,
+      attachments: [],
       files: [new AttachmentBuilder(Buffer.from(transcript, 'utf8'), { name: filename })],
       allowedMentions: { parse: [] }
     });
@@ -442,7 +474,6 @@ async function rejectApplication(interaction) {
   const notifyMarker = `rejection-notified:${interaction.channelId}`;
   const wasNotified = alreadyRejected || archiveMessage.content.includes(notifyMarker);
   if (!wasNotified) {
-    const reason = interaction.isChatInputCommand() ? interaction.options.getString('motivo')?.trim() || '' : '';
     const defaultMessage = `Antes de nada, gracias por el apply y por querer contar con nosotros. Se nota cuando alguien aplica con intención, y eso siempre se agradece.
 
 Lo hemos revisado con calma, pero en este momento no podemos incorporarte en el roster. La decisión no es personal; con la composición actual no vemos que podamos incluirte en la raid.
@@ -457,10 +488,12 @@ Un saludo y suerte. [💪](https://discord.com/assets/6550bf7986e6b411.svg)
 
 {reason}`;
     const template = process.env.APPLY_REJECTED_MESSAGE || defaultMessage;
-    const message = fillTemplate(template, {
+    const reasonText = `Nota: ${reason}`;
+    const filledMessage = fillTemplate(template, {
       user: `<@${applicant.id}>`, character, realm, server: guild.name,
-      channel: `<#${interaction.channelId}>`, reason: reason ? `\n\nNota: ${reason}` : ''
+      channel: `<#${interaction.channelId}>`, reason: `\n\n${reasonText}`
     }).trim();
+    const message = template.includes('{reason}') ? filledMessage : `${filledMessage}\n\n${reasonText}`;
     try {
       await applicant.send({ content: message, allowedMentions: { users: [applicant.id], roles: [], parse: [] } });
     } catch {
@@ -496,9 +529,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.isButton() && /^apply:(accept|reject):\d+$/.test(interaction.customId)) {
       if (interaction.customId.startsWith('apply:accept:')) return await acceptApplication(interaction);
-      return await rejectApplication(interaction);
+      if (!isOfficer(interaction)) return interaction.reply(unauthorizedReply());
+      return interaction.showModal(rejectionReasonModal(applicationUserId(interaction)));
     }
 
+    if (interaction.isModalSubmit() && /^apply:reject-reason:\d+$/.test(interaction.customId)) return await rejectApplication(interaction);
     if (interaction.isModalSubmit() && interaction.customId === 'apply:submit') return await submitApplication(interaction);
     if (!interaction.isChatInputCommand()) return;
 
