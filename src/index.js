@@ -487,12 +487,10 @@ Te deseamos que encuentres un grupo donde te sientas cómodo y puedas disfrutar 
 Un saludo y suerte. 💪`;
 
     const template = process.env.APPLY_REJECTED_MESSAGE || defaultMessage;
-    const reasonText = `Nota: ${reason}`;
-    const filledMessage = fillTemplate(template, {
+    const message = fillTemplate(template, {
       user: `<@${applicant.id}>`, character, realm, server: guild.name,
-      channel: `<#${interaction.channelId}>`, reason: `\n\n${reasonText}`
+      channel: `<#${interaction.channelId}>`, reason: ''
     }).trim();
-    const message = template.includes('{reason}') ? filledMessage : `${filledMessage}\n\n${reasonText}`;
     try {
       await applicant.send({ content: message, allowedMentions: { users: [applicant.id], roles: [], parse: [] } });
     } catch {
