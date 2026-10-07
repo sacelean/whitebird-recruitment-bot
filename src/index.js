@@ -199,10 +199,10 @@ async function publishApplyPanel(interaction) {
   const oldMessage = previous?.channel_id === interaction.channelId
     ? await interaction.channel.messages.fetch({ message: previous.message_id, force: true }).catch(() => null)
     : null;
-  const introMarker = `||whitebird-apply-intro:${guildId}||`;
   const recentMessages = await interaction.channel.messages.fetch({ limit: 100 });
-  let introMessage = recentMessages.find((message) => message.author.id === interaction.client.user.id && message.content.includes(introMarker));
-  const introContent = `${applyIntroduction}\n\n${introMarker}`;
+  const introMessageStart = 'Hola 👋 Te cuento un poco cómo funcionamos';
+  let introMessage = recentMessages.find((message) => message.author.id === interaction.client.user.id && message.content.startsWith(introMessageStart));
+  const introContent = applyIntroduction;
 
   if (oldMessage && introMessage && introMessage.createdTimestamp < oldMessage.createdTimestamp) {
     await introMessage.edit(introContent);
