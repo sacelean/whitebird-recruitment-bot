@@ -12,14 +12,14 @@ Bot independiente para recibir solicitudes de nuevos reclutas y gestionar el pas
    - experiencia en raids;
    - disponibilidad y motivación para entrar en Whitebird.
 3. Al enviar, se crea `apply-nombre-del-personaje` dentro de la categoría de solicitudes. Solo el candidato, los roles de `OFFICER_ROLE_IDS` y el bot pueden ver y escribir en ese canal. El bot publica un mensaje de recepción configurable junto con las respuestas.
-4. Un oficial ejecuta `/apply-aceptar usuario:@miembro` desde el canal privado correspondiente. El bot manda el mensaje de aceptación por DM (o lo publica allí si la persona tiene los DMs cerrados), bloquea la escritura del candidato en el canal de solicitud y crea `raider-nombre` en la categoría de raiders.
+4. Un oficial ejecuta `/apply-aceptar usuario:@miembro` desde el canal privado correspondiente. El bot manda el mensaje de aceptación por DM (o lo publica allí si la persona tiene los DMs cerrados), bloquea la escritura del candidato en el canal de solicitud y crea `raider-personaje-reino` en la categoría de raiders.
 
 El panel se publica o actualiza con `/apply-panel`. Solo el último panel registrado acepta nuevos formularios. Una persona con una solicitud abierta no puede crear otra hasta que su canal anterior se cierre. El canal aceptado se conserva como historial; el candidato puede leerlo, pero ya no escribir, crear hilos ni reaccionar.
 
 ## Configuración
 
 1. Crea una aplicación de Discord y un bot en [Discord Developer Portal](https://discord.com/developers/applications). Copia el token y el Application ID.
-2. Invita el bot al servidor con scopes `bot` y `applications.commands`, y permisos `View Channels`, `Send Messages` y `Manage Channels`. No concedas Administrador.
+2. Invita el bot al servidor con scopes `bot` y `applications.commands`, y permisos `View Channels`, `Send Messages`, `Embed Links`, `Read Message History`, `Manage Channels` y `Manage Roles`. No concedas Administrador. Deja el rol del bot por debajo de los roles de oficiales y otros roles importantes.
 3. Copia `.env.example` a `.env`, completa el token, los IDs y las categorías:
 
 ```dotenv

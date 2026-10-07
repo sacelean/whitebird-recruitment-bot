@@ -181,8 +181,8 @@ async function submitApplication(interaction) {
 
 async function acceptApplication(interaction) {
   if (!isOfficer(interaction)) return interaction.reply(unauthorizedReply());
-  if (!interaction.appPermissions?.has(PermissionFlagsBits.ManageChannels)) {
-    return interaction.reply({ content: 'El bot necesita **Gestionar canales** para completar la aceptación.', flags: MessageFlags.Ephemeral });
+  if (!interaction.appPermissions?.has(PermissionFlagsBits.ManageChannels) || !interaction.appPermissions?.has(PermissionFlagsBits.ManageRoles)) {
+    return interaction.reply({ content: 'El bot necesita **Gestionar canales** y **Gestionar roles** para completar la aceptación y cerrar el apply.', flags: MessageFlags.Ephemeral });
   }
   if (interaction.channel?.type !== ChannelType.GuildText) {
     return interaction.reply({ content: 'Ejecuta `/apply-aceptar` dentro del canal de solicitud correspondiente.', flags: MessageFlags.Ephemeral });
@@ -196,25 +196,33 @@ async function acceptApplication(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const guild = interaction.guild;
   const applicant = await guild.members.fetch(applicantUser.id);
+  const applicationMessages = await interaction.channel.messages.fetch({ limit: 100 });
+  const applicationMessage = applicationMessages.find((message) => message.embeds.some((embed) => embed.title?.startsWith('Apply · ')));
+  const applicationEmbed = applicationMessage?.embeds.find((embed) => embed.title?.startsWith('Apply · '));
+  const character = applicationEmbed?.title?.slice('Apply · '.length).trim() || applicant.displayName;
+  const realm = applicationEmbed?.fields?.find((field) => field.name === questionLabels[1].slice(0, 256))?.value?.trim() || 'reino';
+  const raiderChannelName = `raider-${cleanChannelName(character)}-${cleanChannelName(realm)}`.slice(0, 100);
   const { category, roles, botMember } = await getPrivateChannelSetup(guild, 'RAIDER_CATEGORY_ID');
   const raiderTopic = `whitebird-raider:${guildId}:${applicant.id}`;
   let raiderChannel = guild.channels.cache.find((channel) => channel.type === ChannelType.GuildText && channel.topic === raiderTopic);
   if (!raiderChannel) {
     raiderChannel = await guild.channels.create({
-      name: `raider-${cleanChannelName(applicant.displayName)}-${applicant.id.slice(-4)}`.slice(0, 100),
+      name: raiderChannelName,
       type: ChannelType.GuildText,
       parent: category.id,
       topic: raiderTopic,
       permissionOverwrites: privateOverwrites(guild, applicant.id, roles, botMember.id),
       reason: `Solicitud aceptada por ${interaction.user.tag}`
     });
+  } else if (raiderChannel.name !== raiderChannelName) {
+    await raiderChannel.setName(raiderChannelName, 'Nombre actualizado al personaje y reino de la solicitud');
   }
 
   const template = process.env.APPLY_ACCEPTED_MESSAGE || '¡Enhorabuena, {user}! Tu solicitud ha sido aceptada. Tu canal privado de raider es {channel}.';
   const message = fillTemplate(template, {
     user: `<@${applicant.id}>`,
-    character: applicant.displayName,
-    realm: '',
+    character,
+    realm,
     server: guild.name,
     channel: `<#${raiderChannel.id}>`
   });
