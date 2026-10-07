@@ -11,6 +11,9 @@ const commands = [
     .setName('apply-panel')
     .setDescription('Publica o actualiza el panel de solicitudes en este canal (oficiales)'),
   new SlashCommandBuilder()
+    .setName('apply-corregir')
+    .setDescription('Corrige el personaje principal o reino del apply en este canal'),
+  new SlashCommandBuilder()
     .setName('apply-aceptar')
     .setDescription('Acepta la solicitud del canal actual y crea su canal privado de raider'),
   new SlashCommandBuilder()

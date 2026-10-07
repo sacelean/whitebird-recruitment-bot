@@ -101,6 +101,115 @@ function rejectionReasonModal(applicantId) {
     .addComponents(new ActionRowBuilder().addComponents(reasonInput));
 }
 
+function applicationEditModal(applicantId, character, realm) {
+  const characterInput = new TextInputBuilder()
+    .setCustomId('character')
+    .setLabel('Nombre del personaje main')
+    .setStyle(TextInputStyle.Short)
+    .setMinLength(2)
+    .setMaxLength(100)
+    .setValue(character.slice(0, 100))
+    .setRequired(true);
+  const realmInput = new TextInputBuilder()
+    .setCustomId('realm')
+    .setLabel('Reino')
+    .setStyle(TextInputStyle.Short)
+    .setMinLength(2)
+    .setMaxLength(100)
+    .setValue(realm.slice(0, 100))
+    .setRequired(true);
+  return new ModalBuilder()
+    .setCustomId(`apply:edit-main-submit:${applicantId}`)
+    .setTitle('Corregir main del apply')
+    .addComponents(
+      new ActionRowBuilder().addComponents(characterInput),
+      new ActionRowBuilder().addComponents(realmInput)
+    );
+}
+
+async function findApplicationMessage(channel) {
+  const messages = await channel.messages.fetch({ limit: 100 });
+  return messages.find((message) => message.embeds.some((embed) => embed.title?.startsWith('Apply · '))) || null;
+}
+
+async function openApplicationEdit(interaction) {
+  if (interaction.channel?.type !== ChannelType.GuildText) {
+    return interaction.reply({ content: 'Abre el formulario dentro del canal del apply.', flags: MessageFlags.Ephemeral });
+  }
+  const applicationTopic = getApplicationTopic(interaction.channel);
+  const applicantId = interaction.isChatInputCommand() ? applicationTopic?.applicantId : interaction.customId.split(':').at(-1);
+  if (!applicantId) return applicationMismatchReply(interaction, 'desconocido');
+  if (applicationTopic?.status !== 'open' || applicationTopic.applicantId !== applicantId) {
+    return applicationMismatchReply(interaction, applicantId);
+  }
+  if (interaction.user.id !== applicantId && !isOfficer(interaction)) {
+    return interaction.reply({ content: 'Solo el candidato o un oficial puede corregir este apply.', flags: MessageFlags.Ephemeral });
+  }
+  const applicationMessage = await findApplicationMessage(interaction.channel);
+  const applicationEmbed = applicationMessage?.embeds.find((embed) => embed.title?.startsWith('Apply · '));
+  if (!applicationEmbed) {
+    return interaction.reply({ content: 'No encuentro la ficha del apply en este canal.', flags: MessageFlags.Ephemeral });
+  }
+  const character = applicationEmbed.title.slice('Apply · '.length).trim();
+  const realm = applicationEmbed.fields.find((field) => field.name === questionLabels[1].slice(0, 256))?.value?.trim() || '';
+  return interaction.showModal(applicationEditModal(applicantId, character, realm));
+}
+
+async function updateApplicationMain(interaction) {
+  const applicantId = interaction.customId.split(':').at(-1);
+  const applicationTopic = getApplicationTopic(interaction.channel);
+  if (applicationTopic?.status !== 'open' || applicationTopic.applicantId !== applicantId) {
+    return applicationMismatchReply(interaction, applicantId);
+  }
+  if (interaction.user.id !== applicantId && !isOfficer(interaction)) {
+    return interaction.reply({ content: 'Solo el candidato o un oficial puede corregir este apply.', flags: MessageFlags.Ephemeral });
+  }
+
+  const character = interaction.fields.getTextInputValue('character').trim();
+  const realm = interaction.fields.getTextInputValue('realm').trim();
+  if (!character || !realm) return interaction.reply({ content: 'Indica el personaje y el reino.', flags: MessageFlags.Ephemeral });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const applicationMessage = await findApplicationMessage(interaction.channel);
+  const applicationEmbed = applicationMessage?.embeds.find((embed) => embed.title?.startsWith('Apply · '));
+  if (!applicationMessage || !applicationEmbed) return interaction.editReply('No encuentro la ficha del apply en este canal.');
+  const previousCharacter = applicationEmbed.title.slice('Apply · '.length).trim();
+  const previousRealm = applicationEmbed.fields.find((field) => field.name === questionLabels[1].slice(0, 256))?.value?.trim() || '';
+  if (character === previousCharacter && realm === previousRealm) return interaction.editReply('El personaje y el reino no han cambiado.');
+
+  const fields = applicationEmbed.fields.map((field) => {
+    if (field.name === questionLabels[0].slice(0, 256)) return { ...field, value: character };
+    if (field.name === questionLabels[1].slice(0, 256)) return { ...field, value: realm };
+    if (field.name === 'Raider.IO') {
+      return { ...field, value: `[Ver perfil EU](https://raider.io/characters/eu/${encodeURIComponent(wowRealmSlug(realm))}/${encodeURIComponent(character)})` };
+    }
+    if (field.name === 'Warcraft Logs') {
+      return { ...field, value: `[Ver perfil EU](https://www.warcraftlogs.com/character/eu/${encodeURIComponent(wowRealmSlug(realm))}/${encodeURIComponent(character)})` };
+    }
+    return { ...field };
+  });
+  const updatedEmbed = EmbedBuilder.from(applicationEmbed)
+    .setTitle(`Apply · ${character}`)
+    .setFields(fields);
+  await applicationMessage.edit({ embeds: [updatedEmbed] });
+
+  const oldChannelName = interaction.channel.name;
+  const newChannelName = `apply-${cleanChannelName(character)}`.slice(0, 100);
+  let renameNote = '';
+  if (newChannelName !== oldChannelName) {
+    try {
+      await interaction.channel.setName(newChannelName, `Main corregido por ${interaction.user.tag}`);
+    } catch {
+      renameNote = ' No pude cambiar el nombre del canal; un oficial puede actualizarlo manualmente.';
+    }
+  }
+  await interaction.channel.send({
+    content: `Datos del main corregidos por <@${interaction.user.id}>: **${previousCharacter} · ${previousRealm}** → **${character} · ${realm}**.`,
+    allowedMentions: { users: [interaction.user.id], roles: [], parse: [] }
+  });
+  return interaction.editReply(`Apply actualizado. El main ahora es **${character} · ${realm}**.${renameNote}`);
+}
+
 async function fetchAllMessages(channel) {
   const messages = [];
   let before;
@@ -325,7 +434,8 @@ async function submitApplication(interaction) {
   });
   const decisionButtons = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`apply:accept:${interaction.user.id}`).setLabel('Aceptar').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(`apply:reject:${interaction.user.id}`).setLabel('Rechazar').setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId(`apply:reject:${interaction.user.id}`).setLabel('Rechazar').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`apply:edit-main:${interaction.user.id}`).setLabel('Corregir main/reino').setStyle(ButtonStyle.Secondary)
   );
   try {
     await channel.send({ content, embeds: [embed], components: [decisionButtons], allowedMentions: { users: [interaction.user.id], roles: [], parse: [] } });
@@ -563,6 +673,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return interaction.showModal(applyModal());
     }
 
+    if (interaction.isButton() && /^apply:edit-main:\d+$/.test(interaction.customId)) return await openApplicationEdit(interaction);
+    if (interaction.isModalSubmit() && /^apply:edit-main-submit:\d+$/.test(interaction.customId)) return await updateApplicationMain(interaction);
+
     if (interaction.isButton() && /^apply:(accept|reject):\d+$/.test(interaction.customId)) {
       if (interaction.customId.startsWith('apply:accept:')) return await acceptApplication(interaction);
       if (!isOfficer(interaction)) return interaction.reply(unauthorizedReply());
@@ -574,6 +687,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
     if (interaction.commandName === 'apply-panel') return await publishApplyPanel(interaction);
+    if (interaction.commandName === 'apply-corregir') return await openApplicationEdit(interaction);
     if (interaction.commandName === 'apply-aceptar') return await acceptApplication(interaction);
     if (interaction.commandName === 'apply-rechazar') return await rejectApplication(interaction);
   } catch (error) {
