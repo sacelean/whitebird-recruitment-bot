@@ -78,7 +78,7 @@ export async function fetchRaiderIoProfile(character, realm) {
     fields: 'gear,raid_progression,mythic_plus_scores_by_season:current,mythic_plus_best_runs'
   }).toString();
   try {
-    const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(5000) });
+    const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15000) });
     if (!response.ok) {
       console.warn(`Raider.IO no devolvió datos para ${character}-${realm} (HTTP ${response.status}).`);
       return null;
