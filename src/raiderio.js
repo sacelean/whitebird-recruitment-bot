@@ -70,7 +70,7 @@ export function makeRaiderIoFields(profile, character, realm, { pending = false 
   ];
 }
 
-export async function fetchRaiderIoProfile(character, realm) {
+export async function fetchRaiderIoProfile(character, realm, { signal } = {}) {
   const url = new URL(PROFILE_ENDPOINT);
   url.search = new URLSearchParams({
     region: 'eu',
@@ -79,13 +79,16 @@ export async function fetchRaiderIoProfile(character, realm) {
     fields: 'gear,raid_progression,mythic_plus_scores_by_season:current,mythic_plus_best_runs'
   }).toString();
   try {
-    const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15000) });
+    const timeoutSignal = AbortSignal.timeout(30000);
+    const requestSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+    const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: requestSignal });
     if (!response.ok) {
       console.warn(`Raider.IO no devolvió datos para ${character}-${realm} (HTTP ${response.status}).`);
       return null;
     }
     return await response.json();
   } catch (error) {
+    if (signal?.aborted) return null;
     console.warn(`No se pudieron consultar datos de Raider.IO para ${character}-${realm}: ${error.message}`);
     return null;
   }

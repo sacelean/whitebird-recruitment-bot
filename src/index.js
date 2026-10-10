@@ -27,6 +27,7 @@ const officerRoleIds = new Set((process.env.OFFICER_ROLE_IDS || '').split(',').m
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const questionIds = ['character', 'realm', 'class', 'experience', 'availability'];
 const raiderIoFieldNames = new Set(['Nivel de objeto', 'Recent Raid Progression', 'Boss Kills', 'M+ Score', 'Best M+ Dungeon', 'Achievement Points']);
+const raiderIoRefreshes = new Map();
 const questionLabels = [
   process.env.APPLY_QUESTION_CHARACTER || 'Nombre de tu personaje principal',
   process.env.APPLY_QUESTION_REALM || 'Reino',
@@ -142,8 +143,9 @@ function withRaiderIoFields(applicationEmbed, profile, character, realm, { pendi
   return EmbedBuilder.from(embedData).setFields(fields);
 }
 
-async function refreshRaiderIoCard(applicationMessage, character, realm) {
-  const profile = await fetchRaiderIoProfile(character, realm);
+async function refreshRaiderIoCard(applicationMessage, character, realm, signal) {
+  const profile = await fetchRaiderIoProfile(character, realm, { signal });
+  if (signal.aborted) return;
   const latestMessage = await applicationMessage.fetch().catch(() => null);
   const latestEmbed = latestMessage?.embeds.find((embed) => embed.title?.startsWith('Apply · '));
   if (!latestMessage || !latestEmbed) return;
@@ -154,9 +156,15 @@ async function refreshRaiderIoCard(applicationMessage, character, realm) {
 }
 
 function refreshRaiderIoCardInBackground(applicationMessage, character, realm) {
-  void refreshRaiderIoCard(applicationMessage, character, realm).catch((error) => {
-    console.error(`No se pudo actualizar la tarjeta de Raider.IO para ${character}-${realm}:`, error);
-  });
+  const messageId = applicationMessage.id;
+  raiderIoRefreshes.get(messageId)?.controller.abort();
+  const controller = new AbortController();
+  raiderIoRefreshes.set(messageId, { controller });
+  void refreshRaiderIoCard(applicationMessage, character, realm, controller.signal)
+    .catch((error) => console.error(`No se pudo actualizar la tarjeta de Raider.IO para ${character}-${realm}:`, error))
+    .finally(() => {
+      if (raiderIoRefreshes.get(messageId)?.controller === controller) raiderIoRefreshes.delete(messageId);
+    });
 }
 
 async function openApplicationEdit(interaction) {
@@ -202,7 +210,11 @@ async function updateApplicationMain(interaction) {
   if (!applicationMessage || !applicationEmbed) return interaction.editReply('No encuentro la ficha del apply en este canal.');
   const previousCharacter = applicationEmbed.title.slice('Apply · '.length).trim();
   const previousRealm = applicationEmbed.fields.find((field) => field.name === questionLabels[1].slice(0, 256))?.value?.trim() || '';
-  if (character === previousCharacter && realm === previousRealm) return interaction.editReply('El personaje y el reino no han cambiado.');
+  if (character === previousCharacter && realm === previousRealm) {
+    await applicationMessage.edit({ embeds: [withRaiderIoFields(applicationEmbed, null, character, realm, { pending: true })] });
+    refreshRaiderIoCardInBackground(applicationMessage, character, realm);
+    return interaction.editReply('El main y el reino no han cambiado. Estoy actualizando las estadísticas de Raider.IO en la ficha.');
+  }
 
   const fields = applicationEmbed.fields.filter((field) => !raiderIoFieldNames.has(field.name)).map((field) => {
     if (field.name === questionLabels[0].slice(0, 256)) return { ...field, value: character };
