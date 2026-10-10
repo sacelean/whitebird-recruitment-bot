@@ -17,6 +17,7 @@ import {
 } from 'discord.js';
 import { getPanel, savePanel } from './database.js';
 import { saveWowLink } from './wow-links.js';
+import { fetchRaiderIoProfile, makeRaiderIoFields, wowRealmSlug } from './raiderio.js';
 
 const token = process.env.DISCORD_TOKEN;
 const guildId = process.env.DISCORD_GUILD_ID;
@@ -178,7 +179,8 @@ async function updateApplicationMain(interaction) {
   const previousRealm = applicationEmbed.fields.find((field) => field.name === questionLabels[1].slice(0, 256))?.value?.trim() || '';
   if (character === previousCharacter && realm === previousRealm) return interaction.editReply('El personaje y el reino no han cambiado.');
 
-  const fields = applicationEmbed.fields.map((field) => {
+  const statFieldNames = new Set(['Nivel de objeto', 'Recent Raid Progression', 'Boss Kills', 'M+ Score', 'Best M+ Dungeon', 'Achievement Points']);
+  const fields = applicationEmbed.fields.filter((field) => !statFieldNames.has(field.name)).map((field) => {
     if (field.name === questionLabels[0].slice(0, 256)) return { ...field, value: character };
     if (field.name === questionLabels[1].slice(0, 256)) return { ...field, value: realm };
     if (field.name === 'Raider.IO') {
@@ -189,6 +191,8 @@ async function updateApplicationMain(interaction) {
     }
     return { ...field };
   });
+  const raiderProfile = await fetchRaiderIoProfile(character, realm);
+  fields.splice(questionIds.length, 0, ...makeRaiderIoFields(raiderProfile, character, realm));
   const updatedEmbed = EmbedBuilder.from(applicationEmbed)
     .setTitle(`Apply · ${character}`)
     .setFields(fields);
@@ -313,11 +317,6 @@ function cleanChannelName(value) {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'recluta';
 }
 
-function wowRealmSlug(value) {
-  return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-    .replace(/['’]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
-
 async function getPrivateChannelSetup(guild, categoryEnvName) {
   const categoryId = process.env[categoryEnvName];
   if (!categoryId) throw new Error(`Falta ${categoryEnvName} en .env.`);
@@ -399,6 +398,7 @@ async function submitApplication(interaction) {
   if (existing) return interaction.editReply(`Ya tienes una solicitud abierta: ${existing}.`);
 
   const { category, roles, botMember } = await getPrivateChannelSetup(interaction.guild, 'APPLY_CATEGORY_ID');
+  const raiderProfile = await fetchRaiderIoProfile(values.character, values.realm);
   const channel = await interaction.guild.channels.create({
     name: `apply-${cleanChannelName(values.character)}`,
     type: ChannelType.GuildText,
@@ -415,6 +415,7 @@ async function submitApplication(interaction) {
     .setDescription(`Solicitud enviada por <@${interaction.user.id}>`)
     .addFields([
       ...answers.map((value, index) => ({ name: questionLabels[index].slice(0, 256), value: value.slice(0, 1024) })),
+      ...makeRaiderIoFields(raiderProfile, values.character, values.realm),
       {
         name: 'Raider.IO',
         value: `[Ver perfil EU](https://raider.io/characters/eu/${encodeURIComponent(wowRealmSlug(values.realm))}/${encodeURIComponent(values.character)})`,

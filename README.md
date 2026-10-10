@@ -18,6 +18,8 @@ Bot independiente para recibir solicitudes de nuevos reclutas y gestionar el pas
 
 El panel se publica o actualiza con `/apply-panel`. Solo el último panel registrado acepta nuevos formularios. Una persona con una solicitud abierta no puede crear otra hasta que su canal anterior se cierre. Al aceptar o rechazar, la transcripción se guarda en `ENTRY_CHANNEL_ID` y el canal temporal del apply se elimina; al aceptar, el canal privado de raider se conserva.
 
+La ficha del apply consulta el perfil público de Raider.IO para añadir nivel de objeto, progreso de raid, kills por dificultad, puntuación y mejor M+, y puntos de logro. La consulta usa región EU y no requiere credenciales. Si Raider.IO no encuentra el personaje, limita la petición o no responde, el apply se crea igualmente y las estadísticas aparecen como no disponibles. El botón **Corregir main/reino** vuelve a consultar y actualizar estas estadísticas. El embed mantiene el enlace al perfil de Raider.IO como atribución.
+
 ## Configuración
 
 1. Crea una aplicación de Discord y un bot en [Discord Developer Portal](https://discord.com/developers/applications). Copia el token y el Application ID.
