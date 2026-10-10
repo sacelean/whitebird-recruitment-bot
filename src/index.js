@@ -136,9 +136,10 @@ async function findApplicationMessage(channel) {
 }
 
 function withRaiderIoFields(applicationEmbed, profile, character, realm, { pending = false } = {}) {
-  const fields = applicationEmbed.fields.filter((field) => !raiderIoFieldNames.has(field.name));
+  const embedData = applicationEmbed instanceof EmbedBuilder ? applicationEmbed.toJSON() : applicationEmbed;
+  const fields = (embedData.fields || []).filter((field) => !raiderIoFieldNames.has(field.name));
   fields.splice(questionIds.length, 0, ...makeRaiderIoFields(profile, character, realm, { pending }));
-  return EmbedBuilder.from(applicationEmbed).setFields(fields);
+  return EmbedBuilder.from(embedData).setFields(fields);
 }
 
 async function refreshRaiderIoCard(applicationMessage, character, realm) {
