@@ -26,6 +26,7 @@ if (!token || !guildId) throw new Error('Configura DISCORD_TOKEN y DISCORD_GUILD
 const officerRoleIds = new Set((process.env.OFFICER_ROLE_IDS || '').split(',').map((id) => id.trim()).filter(Boolean));
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const questionIds = ['character', 'realm', 'class', 'experience', 'availability'];
+const raiderIoFieldNames = new Set(['Nivel de objeto', 'Recent Raid Progression', 'Boss Kills', 'M+ Score', 'Best M+ Dungeon', 'Achievement Points']);
 const questionLabels = [
   process.env.APPLY_QUESTION_CHARACTER || 'Nombre de tu personaje principal',
   process.env.APPLY_QUESTION_REALM || 'Reino',
@@ -134,6 +135,29 @@ async function findApplicationMessage(channel) {
   return messages.find((message) => message.embeds.some((embed) => embed.title?.startsWith('Apply · '))) || null;
 }
 
+function withRaiderIoFields(applicationEmbed, profile, character, realm, { pending = false } = {}) {
+  const fields = applicationEmbed.fields.filter((field) => !raiderIoFieldNames.has(field.name));
+  fields.splice(questionIds.length, 0, ...makeRaiderIoFields(profile, character, realm, { pending }));
+  return EmbedBuilder.from(applicationEmbed).setFields(fields);
+}
+
+async function refreshRaiderIoCard(applicationMessage, character, realm) {
+  const profile = await fetchRaiderIoProfile(character, realm);
+  const latestMessage = await applicationMessage.fetch().catch(() => null);
+  const latestEmbed = latestMessage?.embeds.find((embed) => embed.title?.startsWith('Apply · '));
+  if (!latestMessage || !latestEmbed) return;
+  const latestCharacter = latestEmbed.title.slice('Apply · '.length).trim();
+  const latestRealm = latestEmbed.fields.find((field) => field.name === questionLabels[1].slice(0, 256))?.value?.trim() || '';
+  if (latestCharacter !== character || latestRealm !== realm) return;
+  await latestMessage.edit({ embeds: [withRaiderIoFields(latestEmbed, profile, character, realm)] });
+}
+
+function refreshRaiderIoCardInBackground(applicationMessage, character, realm) {
+  void refreshRaiderIoCard(applicationMessage, character, realm).catch((error) => {
+    console.error(`No se pudo actualizar la tarjeta de Raider.IO para ${character}-${realm}:`, error);
+  });
+}
+
 async function openApplicationEdit(interaction) {
   if (interaction.channel?.type !== ChannelType.GuildText) {
     return interaction.reply({ content: 'Abre el formulario dentro del canal del apply.', flags: MessageFlags.Ephemeral });
@@ -179,8 +203,7 @@ async function updateApplicationMain(interaction) {
   const previousRealm = applicationEmbed.fields.find((field) => field.name === questionLabels[1].slice(0, 256))?.value?.trim() || '';
   if (character === previousCharacter && realm === previousRealm) return interaction.editReply('El personaje y el reino no han cambiado.');
 
-  const statFieldNames = new Set(['Nivel de objeto', 'Recent Raid Progression', 'Boss Kills', 'M+ Score', 'Best M+ Dungeon', 'Achievement Points']);
-  const fields = applicationEmbed.fields.filter((field) => !statFieldNames.has(field.name)).map((field) => {
+  const fields = applicationEmbed.fields.filter((field) => !raiderIoFieldNames.has(field.name)).map((field) => {
     if (field.name === questionLabels[0].slice(0, 256)) return { ...field, value: character };
     if (field.name === questionLabels[1].slice(0, 256)) return { ...field, value: realm };
     if (field.name === 'Raider.IO') {
@@ -191,12 +214,11 @@ async function updateApplicationMain(interaction) {
     }
     return { ...field };
   });
-  const raiderProfile = await fetchRaiderIoProfile(character, realm);
-  fields.splice(questionIds.length, 0, ...makeRaiderIoFields(raiderProfile, character, realm));
   const updatedEmbed = EmbedBuilder.from(applicationEmbed)
     .setTitle(`Apply · ${character}`)
     .setFields(fields);
-  await applicationMessage.edit({ embeds: [updatedEmbed] });
+  const pendingEmbed = withRaiderIoFields(updatedEmbed, null, character, realm, { pending: true });
+  await applicationMessage.edit({ embeds: [pendingEmbed] });
 
   const oldChannelName = interaction.channel.name;
   const newChannelName = `apply-${cleanChannelName(character)}`.slice(0, 100);
@@ -212,6 +234,7 @@ async function updateApplicationMain(interaction) {
     content: `Datos del main corregidos por <@${interaction.user.id}>: **${previousCharacter} · ${previousRealm}** → **${character} · ${realm}**.`,
     allowedMentions: { users: [interaction.user.id], roles: [], parse: [] }
   });
+  refreshRaiderIoCardInBackground(applicationMessage, character, realm);
   return interaction.editReply(`Apply actualizado. El main ahora es **${character} · ${realm}**.${renameNote}`);
 }
 
@@ -398,7 +421,6 @@ async function submitApplication(interaction) {
   if (existing) return interaction.editReply(`Ya tienes una solicitud abierta: ${existing}.`);
 
   const { category, roles, botMember } = await getPrivateChannelSetup(interaction.guild, 'APPLY_CATEGORY_ID');
-  const raiderProfile = await fetchRaiderIoProfile(values.character, values.realm);
   const channel = await interaction.guild.channels.create({
     name: `apply-${cleanChannelName(values.character)}`,
     type: ChannelType.GuildText,
@@ -415,7 +437,7 @@ async function submitApplication(interaction) {
     .setDescription(`Solicitud enviada por <@${interaction.user.id}>`)
     .addFields([
       ...answers.map((value, index) => ({ name: questionLabels[index].slice(0, 256), value: value.slice(0, 1024) })),
-      ...makeRaiderIoFields(raiderProfile, values.character, values.realm),
+      ...makeRaiderIoFields(null, values.character, values.realm, { pending: true }),
       {
         name: 'Raider.IO',
         value: `[Ver perfil EU](https://raider.io/characters/eu/${encodeURIComponent(wowRealmSlug(values.realm))}/${encodeURIComponent(values.character)})`,
@@ -440,12 +462,14 @@ async function submitApplication(interaction) {
     new ButtonBuilder().setCustomId(`apply:reject:${interaction.user.id}`).setLabel('Rechazar').setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId(`apply:edit-main:${interaction.user.id}`).setLabel('Corregir main/reino').setStyle(ButtonStyle.Secondary)
   );
+  let applicationMessage;
   try {
-    await channel.send({ content, embeds: [embed], components: [decisionButtons], allowedMentions: { users: [interaction.user.id], roles: [], parse: [] } });
+    applicationMessage = await channel.send({ content, embeds: [embed], components: [decisionButtons], allowedMentions: { users: [interaction.user.id], roles: [], parse: [] } });
   } catch (error) {
     await channel.delete('No se pudo publicar el contenido de la solicitud').catch(() => {});
     throw error;
   }
+  refreshRaiderIoCardInBackground(applicationMessage, values.character, values.realm);
   return interaction.editReply(`Apply enviado. Tu canal privado es ${channel}; los oficiales lo revisarán allí.`);
 }
 

@@ -51,7 +51,8 @@ function currentBossKills(profile) {
   return `**N:** ${totals[0]} · **H:** ${totals[1]} · **M:** ${totals[2]}`;
 }
 
-export function makeRaiderIoFields(profile, character, realm) {
+export function makeRaiderIoFields(profile, character, realm, { pending = false } = {}) {
+  const unavailable = pending ? 'Consultando Raider.IO…' : 'No disponible';
   const gearLevel = profile?.gear?.item_level_equipped;
   const season = profile?.mythic_plus_scores_by_season?.[0];
   const bestRun = profile?.mythic_plus_best_runs?.[0];
@@ -61,11 +62,11 @@ export function makeRaiderIoFields(profile, character, realm) {
   const characterUrl = `https://worldofwarcraft.com/en-eu/character/${encodeURIComponent(wowRealmSlug(realm))}/${encodeURIComponent(character)}`;
   return [
     { name: 'Nivel de objeto', value: gearLevel ? `[**${Math.round(gearLevel)} ilvl**](${characterUrl})` : `[Ver personaje](${characterUrl})`, inline: true },
-    { name: 'Recent Raid Progression', value: currentRaidProgress(profile), inline: false },
-    { name: 'Boss Kills', value: currentBossKills(profile), inline: true },
-    { name: 'M+ Score', value: Number.isFinite(season?.scores?.all) ? String(Math.round(season.scores.all)) : 'No disponible', inline: true },
-    { name: 'Best M+ Dungeon', value: dungeon, inline: true },
-    { name: 'Achievement Points', value: Number.isFinite(profile?.achievement_points) ? String(profile.achievement_points) : 'No disponible', inline: true }
+    { name: 'Recent Raid Progression', value: profile ? currentRaidProgress(profile) : unavailable, inline: false },
+    { name: 'Boss Kills', value: profile ? currentBossKills(profile) : unavailable, inline: true },
+    { name: 'M+ Score', value: Number.isFinite(season?.scores?.all) ? String(Math.round(season.scores.all)) : unavailable, inline: true },
+    { name: 'Best M+ Dungeon', value: profile ? dungeon : unavailable, inline: true },
+    { name: 'Achievement Points', value: Number.isFinite(profile?.achievement_points) ? String(profile.achievement_points) : unavailable, inline: true }
   ];
 }
 
