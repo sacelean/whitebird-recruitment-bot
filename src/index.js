@@ -339,7 +339,7 @@ function privateOverwrites(guild, targetId, roles, botId, additionalBotIds = [])
     { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
     { id: targetId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
     ...roles.map((role) => ({ id: role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] })),
-    ...new Set([botId, ...additionalBotIds]).map((id) => ({ id, allow: botPermissions }))
+    ...[...new Set([botId, ...additionalBotIds])].map((id) => ({ id, allow: botPermissions }))
   ];
 }
 
