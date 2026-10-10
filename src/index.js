@@ -334,12 +334,13 @@ async function getPrivateChannelSetup(guild, categoryEnvName) {
   return { category, roles, botMember };
 }
 
-function privateOverwrites(guild, targetId, roles, botId) {
+function privateOverwrites(guild, targetId, roles, botId, additionalBotIds = []) {
+  const botPermissions = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels];
   return [
     { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
     { id: targetId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
     ...roles.map((role) => ({ id: role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] })),
-    { id: botId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels] }
+    ...new Set([botId, ...additionalBotIds]).map((id) => ({ id, allow: botPermissions }))
   ];
 }
 
@@ -467,6 +468,14 @@ async function acceptApplication(interaction) {
     return interaction.editReply('No puedo completar la aceptación: falta configurar el acceso compartido a la base del bot de sync (`WOW_ROLE_SYNC_DATABASE_PATH`).');
   }
   const guild = interaction.guild;
+  const syncBotId = (process.env.WOW_ROLE_SYNC_BOT_ID || '').trim();
+  if (!/^\d{15,22}$/.test(syncBotId)) {
+    return interaction.editReply('No puedo completar la aceptación: configura `WOW_ROLE_SYNC_BOT_ID` con el ID del bot de sync roles.');
+  }
+  const syncBotMember = await guild.members.fetch(syncBotId).catch(() => null);
+  if (!syncBotMember?.user.bot) {
+    return interaction.editReply('No encuentro en este servidor el bot indicado en `WOW_ROLE_SYNC_BOT_ID`. Invítalo al servidor y revisa el ID antes de aceptar.');
+  }
   const applicant = await guild.members.fetch(applicantId);
   const applicationMessages = await interaction.channel.messages.fetch({ limit: 100 });
   const applicationMessage = applicationMessages.find((message) => message.embeds.some((embed) => embed.title?.startsWith('Apply · ')));
@@ -495,12 +504,18 @@ async function acceptApplication(interaction) {
       type: ChannelType.GuildText,
       parent: category.id,
       topic: raiderTopic,
-      permissionOverwrites: privateOverwrites(guild, applicant.id, roles, botMember.id),
+      permissionOverwrites: privateOverwrites(guild, applicant.id, roles, botMember.id, [syncBotMember.id]),
       reason: `Solicitud aceptada por ${interaction.user.tag}`
     });
   } else if (raiderChannel.name !== raiderChannelName) {
     await raiderChannel.setName(raiderChannelName, 'Nombre actualizado al personaje y reino de la solicitud');
   }
+  await raiderChannel.permissionOverwrites.edit(syncBotMember.id, {
+    ViewChannel: true,
+    SendMessages: true,
+    ReadMessageHistory: true,
+    ManageChannels: true
+  }, `Acceso del bot de sync roles al canal Raider de ${applicant.user.tag}`);
 
   const raiderWelcomeMarker = 'Este será tu espacio personal con el staff para:';
   const recentRaiderMessages = await raiderChannel.messages.fetch({ limit: 100 });
@@ -558,7 +573,7 @@ https://discord.com/channels/1463652921898963146/1463652923253719247`;
   }
 
   try {
-    saveWowLink(guildId, applicant.id, character, wowRealmSlug(realm));
+    saveWowLink(guildId, applicant.id, character, wowRealmSlug(realm), raiderChannel.id);
   } catch (error) {
     console.error(`No se pudo vincular ${applicant.id} con ${character}-${realm}:`, error);
     return interaction.editReply(`La bienvenida y la transcripción están guardadas, pero no pude registrar el main en el bot de sync. El canal de apply sigue abierto para que puedas corregir la configuración y reintentar. Detalle: ${error.message}`);
