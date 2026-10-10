@@ -23,7 +23,7 @@ La ficha del apply consulta el perfil público de Raider.IO para añadir nivel d
 ## Configuración
 
 1. Crea una aplicación de Discord y un bot en [Discord Developer Portal](https://discord.com/developers/applications). Copia el token y el Application ID.
-2. Invita el bot al servidor con scopes `bot` y `applications.commands`, y permisos `View Channels`, `Send Messages`, `Embed Links`, `Read Message History`, `Attach Files` y `Manage Channels`. No concedas Administrador.
+2. Invita el bot al servidor con scopes `bot` y `applications.commands`, y permisos `View Channels`, `Send Messages`, `Embed Links`, `Read Message History`, `Attach Files`, `Manage Channels` y `Manage Roles`. No concedas Administrador.
 3. Copia `.env.example` a `.env`, completa el token, los IDs y las categorías:
 
 ```dotenv
@@ -40,6 +40,8 @@ WOW_ROLE_SYNC_BOT_ID=id_usuario_del_bot_de_sync
 ```
 
 Activa el modo desarrollador de Discord para copiar IDs. `WOW_ROLE_SYNC_BOT_ID` es el ID de usuario del bot de WoW Role Sync (puedes copiarlo con clic derecho sobre el bot en el servidor). Coloca las categorías, el canal de entrada y los roles dentro del servidor configurado. En el canal de entrada, el bot necesita `View Channels`, `Send Messages`, `Read Message History` y `Attach Files`. Añade todos los roles de oficiales que deban poder ver y hablar en los canales privados.
+
+Para que `/apply-aceptar` pueda dar acceso al bot de sync en el canal Raider, el rol de **Whitebird Apply** necesita `Manage Roles` y `Manage Channels`, y debe estar por encima del rol más alto de **Whitebird Role Sync** en Ajustes del servidor → Roles. Aplica estos permisos solo al bot de Apply; no uses `Administrator`.
 
 Los textos de las preguntas y los mensajes predefinidos se pueden cambiar en `.env`. El mensaje de aceptación predeterminado es la bienvenida de Recluta integrada en el bot. Si ya tenías una variable `APPLY_ACCEPTED_MESSAGE` en `.env` con el texto anterior, elimínala para usar la bienvenida nueva. El mensaje de rechazo también se puede personalizar con `APPLY_REJECTED_MESSAGE`. Los marcadores disponibles son `{user}`, `{character}`, `{realm}`, `{server}` y `{channel}`. El motivo obligatorio de rechazo solo se incluye en la transcripción y no se manda por MD.
 

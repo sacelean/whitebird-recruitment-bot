@@ -514,6 +514,16 @@ async function acceptApplication(interaction) {
   if (!syncBotMember?.user.bot) {
     return interaction.editReply('No encuentro en este servidor el bot indicado en `WOW_ROLE_SYNC_BOT_ID`. Invítalo al servidor y revisa el ID antes de aceptar.');
   }
+  const applyBotMember = await guild.members.fetchMe();
+  if (!applyBotMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    return interaction.editReply('No puedo completar la aceptación: **Whitebird Apply** necesita el permiso de servidor **Gestionar roles** para configurar los permisos del canal Raider. Concédeselo a su rol y vuelve a aceptar.');
+  }
+  if (!applyBotMember.permissions.has(PermissionFlagsBits.ManageChannels)) {
+    return interaction.editReply('No puedo completar la aceptación: **Whitebird Apply** necesita el permiso de servidor **Gestionar canales** para dar acceso al bot de sync y renombrar el canal Raider. Concédeselo a su rol y vuelve a aceptar.');
+  }
+  if (applyBotMember.roles.highest.comparePositionTo(syncBotMember.roles.highest) <= 0) {
+    return interaction.editReply('No puedo completar la aceptación: coloca el rol de **Whitebird Apply** por encima del rol más alto de **Whitebird Role Sync** en Ajustes del servidor → Roles. Luego vuelve a aceptar.');
+  }
   const applicant = await guild.members.fetch(applicantId);
   const applicationMessages = await interaction.channel.messages.fetch({ limit: 100 });
   const applicationMessage = applicationMessages.find((message) => message.embeds.some((embed) => embed.title?.startsWith('Apply · ')));
@@ -545,15 +555,35 @@ async function acceptApplication(interaction) {
       permissionOverwrites: privateOverwrites(guild, applicant.id, roles, botMember.id, [syncBotMember.id]),
       reason: `Solicitud aceptada por ${interaction.user.tag}`
     });
-  } else if (raiderChannel.name !== raiderChannelName) {
-    await raiderChannel.setName(raiderChannelName, 'Nombre actualizado al personaje y reino de la solicitud');
+  } else {
+    const channelPermissions = raiderChannel.permissionsFor(botMember);
+    if (!channelPermissions?.has(PermissionFlagsBits.ViewChannel) || !channelPermissions.has(PermissionFlagsBits.ManageChannels)) {
+      return interaction.editReply(`No puedo reutilizar ${raiderChannel}: al bot **Whitebird Apply** le faltan permisos para ver y gestionar ese canal. En los permisos del canal o de su categoría, permite **Ver canal** y **Gestionar canales** a Whitebird Apply; después vuelve a aceptar el apply.`);
+    }
+    if (raiderChannel.name !== raiderChannelName) {
+      try {
+        await raiderChannel.setName(raiderChannelName, 'Nombre actualizado al personaje y reino de la solicitud');
+      } catch (error) {
+        if (error?.code === 50001 || error?.code === 50013) {
+          return interaction.editReply(`No pude renombrar ${raiderChannel}. Revisa que **Whitebird Apply** tenga **Ver canal** y **Gestionar canales** en ese canal o en su categoría. El apply sigue abierto; corrige los permisos y vuelve a aceptar.`);
+        }
+        throw error;
+      }
+    }
   }
-  await raiderChannel.permissionOverwrites.edit(syncBotMember.id, {
-    ViewChannel: true,
-    SendMessages: true,
-    ReadMessageHistory: true,
-    ManageChannels: true
-  }, `Acceso del bot de sync roles al canal Raider de ${applicant.user.tag}`);
+  try {
+    await raiderChannel.permissionOverwrites.edit(syncBotMember.id, {
+      ViewChannel: true,
+      SendMessages: true,
+      ReadMessageHistory: true,
+      ManageChannels: true
+    }, `Acceso del bot de sync roles al canal Raider de ${applicant.user.tag}`);
+  } catch (error) {
+    if (error?.code === 50013 || error?.code === 50001) {
+      return interaction.editReply(`Discord no permitió dar acceso a **Whitebird Role Sync** en ${raiderChannel}. Revisa que el rol de **Whitebird Apply** tenga **Gestionar roles** y **Gestionar canales**, que esté por encima del rol de **Whitebird Role Sync**, y que pueda ver ese canal. El apply sigue abierto; corrige los permisos y vuelve a aceptar.`);
+    }
+    throw error;
+  }
 
   const raiderWelcomeMarker = 'Este será tu espacio personal con el staff para:';
   const recentRaiderMessages = await raiderChannel.messages.fetch({ limit: 100 });
