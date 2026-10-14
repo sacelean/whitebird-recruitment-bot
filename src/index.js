@@ -24,7 +24,7 @@ const guildId = process.env.DISCORD_GUILD_ID;
 if (!token || !guildId) throw new Error('Configura DISCORD_TOKEN y DISCORD_GUILD_ID en .env.');
 
 const officerRoleIds = new Set((process.env.OFFICER_ROLE_IDS || '').split(',').map((id) => id.trim()).filter(Boolean));
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.MessageContent] });
 const questionIds = ['character', 'realm', 'class', 'experience', 'availability'];
 const raiderIoFieldNames = new Set(['Nivel de objeto', 'Recent Raid Progression', 'Boss Kills', 'M+ Score', 'Best M+ Dungeon', 'Achievement Points']);
 const raiderIoRefreshes = new Map();
@@ -294,7 +294,7 @@ function renderTranscript(messages, { applicant, character, realm, resolvedBy, o
     }
     for (const sticker of message.stickers.values()) lines.push(`Sticker: ${sticker.name}${sticker.url ? ` — ${sticker.url}` : ''}`);
     if (!message.content && message.embeds.length === 0 && message.attachments.size === 0 && message.stickers.size === 0) {
-      lines.push('[Mensaje sin texto ni adjuntos disponibles en el historial de Discord]');
+      lines.push('[Discord no devolvió el texto ni los adjuntos de este mensaje. Si el mensaje sí tenía contenido, comprueba que Message Content Intent esté activado en el Developer Portal y en el bot.]');
     }
     lines.push('');
   }

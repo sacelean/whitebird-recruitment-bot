@@ -24,7 +24,8 @@ La ficha del apply consulta el perfil público de Raider.IO para añadir nivel d
 
 1. Crea una aplicación de Discord y un bot en [Discord Developer Portal](https://discord.com/developers/applications). Copia el token y el Application ID.
 2. Invita el bot al servidor con scopes `bot` y `applications.commands`, y permisos `View Channels`, `Send Messages`, `Embed Links`, `Read Message History`, `Attach Files`, `Manage Channels` y `Manage Roles`. No concedas Administrador.
-3. Copia `.env.example` a `.env`, completa el token, los IDs y las categorías:
+3. En Developer Portal → aplicación → **Bot** → **Privileged Gateway Intents**, activa **Message Content Intent**. Es necesario para que el bot pueda leer en las transcripciones el texto de mensajes enviados por candidatos y oficiales. El código también debe iniciar con `GatewayIntentBits.MessageContent`.
+4. Copia `.env.example` a `.env`, completa el token, los IDs y las categorías:
 
 ```dotenv
 DISCORD_TOKEN=...
