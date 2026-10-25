@@ -1,5 +1,7 @@
 # Whitebird Recruitment Bot
 
+[Release notes](RELEASE_NOTES.md)
+
 Bot independiente para recibir solicitudes de nuevos reclutas y gestionar el paso de solicitud a raider. El bot de roles WoW permanece separado.
 
 ## Flujo de solicitud
