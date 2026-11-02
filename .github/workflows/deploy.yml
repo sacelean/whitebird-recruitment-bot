@@ -1,0 +1,50 @@
+name: Check and deploy to OCI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Build production image
+        run: docker build -t whitebird-test .
+      - name: Check JavaScript syntax without production credentials
+        run: |
+          docker run --rm --entrypoint sh whitebird-test -ec \
+            'for file in src/*.js; do node --check "$file"; done'
+          docker run --rm --entrypoint node whitebird-test --input-type=module -e \
+            "import Database from 'better-sqlite3'; const db = new Database(':memory:'); db.prepare('SELECT 1').get(); db.close();"
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: oci-production
+      cancel-in-progress: false
+    env:
+      OCI_HOST: ${{ secrets.OCI_HOST }}
+      OCI_USER: ${{ secrets.OCI_USER }}
+      OCI_SSH_KEY: ${{ secrets.OCI_SSH_KEY }}
+      OCI_KNOWN_HOSTS: ${{ secrets.OCI_KNOWN_HOSTS }}
+      OCI_DEPLOY_PATH: ${{ secrets.OCI_DEPLOY_PATH }}
+      OCI_SSH_PORT: ${{ secrets.OCI_SSH_PORT || '22' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Configure SSH and deploy
+        shell: bash
+        run: bash scripts/deploy-oci.sh

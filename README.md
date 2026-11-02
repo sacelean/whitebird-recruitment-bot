@@ -76,6 +76,47 @@ docker compose up -d
 docker compose logs -f bot
 ```
 
+## Despliegue automático con GitHub Actions
+
+El workflow `.github/workflows/deploy.yml` construye la imagen, comprueba la sintaxis de JavaScript y verifica que SQLite puede abrir una base en memoria en cada pull request y push a `main`, sin credenciales de producción. Si las comprobaciones pasan, los pushes a `main` despliegan en OCI por SSH. También puedes ejecutarlo desde **Actions → Check and deploy to OCI → Run workflow**, seleccionando `main`. Los despliegues se ejecutan de uno en uno.
+
+El despliegue sincroniza el código, construye la imagen, registra los comandos de Discord y recrea el servicio `bot`. Solo termina correctamente cuando el contenedor sigue ejecutándose sin reinicios y anuncia su conexión a Discord. Si falla, revisa los logs de Actions y `docker compose logs bot` en el servidor.
+
+### Preparación del servidor (una vez)
+
+Usa una carpeta dedicada exclusivamente a este repositorio, con `.env` configurado y `data/` con permisos de escritura para UID 1000. `WOW_ROLE_SYNC_DATA_DIR` debe apuntar a la carpeta de datos existente del bot de sync, fuera de esta carpeta de despliegue.
+
+El usuario SSH necesita permisos para escribir en la carpeta y ejecutar Docker y Compose v2 sin sudo ni preguntas interactivas. El servidor necesita Bash, rsync y flock (util-linux), y debe aceptar conexiones SSH desde los runners de GitHub.
+
+```sh
+cd /home/ubuntu/whitebird-recruitment-bot
+# Completa antes .env y prepara data/ con permisos para UID 1000.
+test -f .env && test -d data && touch .allow-github-deploy
+chmod 600 .env
+docker compose config --quiet
+```
+
+El marcador `.allow-github-deploy` autoriza la sincronización en esa ruta. Se usa `rsync --delete`: se conservan `.git/`, `.env`, `data/`, `node_modules/`, `.deploy.lock` y `.allow-github-deploy`, pero se eliminan otros archivos que no estén en el repositorio. Guarda copias de seguridad y otros proyectos fuera de esa carpeta. La base compartida del bot de sync permanece en su ruta externa.
+
+Crea una clave SSH de despliegue sin contraseña y añade su clave pública a `~/.ssh/authorized_keys` del usuario del servidor.
+
+### Secrets en GitHub
+
+En **Settings → Secrets and variables → Actions → Repository secrets**, configura:
+
+| Secret | Valor |
+|---|---|
+| `OCI_HOST` | IP o hostname del servidor OCI. |
+| `OCI_USER` | Usuario SSH, por ejemplo `ubuntu`. |
+| `OCI_SSH_KEY` | Clave privada de despliegue completa, con sus saltos de línea. |
+| `OCI_KNOWN_HOSTS` | Entrada SSH verificada del servidor. |
+| `OCI_DEPLOY_PATH` | Ruta absoluta exclusiva del bot, por ejemplo `/home/ubuntu/whitebird-recruitment-bot`. |
+| `OCI_SSH_PORT` | Opcional; por defecto `22`. |
+
+Puedes reutilizar los valores de conexión del bot de sync, pero `OCI_DEPLOY_PATH` debe apuntar a este bot. La ruta admite letras, números, guiones y guiones bajos, sin barra final. Para obtener `OCI_KNOWN_HOSTS`, ejecuta `ssh-keyscan -p 22 -H HOST` desde un equipo de confianza y verifica la huella con la consola de OCI (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`) antes de guardar la entrada. Ajusta el puerto si corresponde.
+
+Las credenciales de Discord y la configuración del bot permanecen en el `.env` del servidor.
+
 ## Ejecución directa con Node.js
 
 Requiere Node.js 20.11 o posterior:
