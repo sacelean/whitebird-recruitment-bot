@@ -15,7 +15,7 @@ import {
   TextInputBuilder,
   TextInputStyle
 } from 'discord.js';
-import { getPanel, savePanel } from './database.js';
+import { getPanel, savePanel, beginDecision, recordDecisionProgress } from './database.js';
 import { saveWowLink } from './wow-links.js';
 import { fetchRaiderIoProfile, makeRaiderIoFields, wowRealmSlug } from './raiderio.js';
 
@@ -544,6 +544,7 @@ async function acceptApplication(interaction) {
   const archiveMessages = await entryChannel.messages.fetch({ limit: 100 });
   let archiveMessage = archiveMessages.find((message) => message.content.includes(archiveMarker));
   const { category, roles, botMember } = await getPrivateChannelSetup(guild, 'RAIDER_CATEGORY_ID');
+  beginDecision(interaction, applicant, character, realm, 'aceptada');
   const raiderTopic = `whitebird-raider:${guildId}:${applicant.id}`;
   let raiderChannel = guild.channels.cache.find((channel) => channel.type === ChannelType.GuildText && channel.topic === raiderTopic);
   if (!raiderChannel) {
@@ -571,6 +572,7 @@ async function acceptApplication(interaction) {
       }
     }
   }
+  recordDecisionProgress(interaction, { channelId: raiderChannel.id });
   try {
     await raiderChannel.permissionOverwrites.edit(syncBotMember.id, {
       ViewChannel: true,
@@ -642,12 +644,14 @@ https://discord.com/channels/1463652921898963146/1463652923253719247`;
 
   try {
     saveWowLink(guildId, applicant.id, character, wowRealmSlug(realm), raiderChannel.id);
+    recordDecisionProgress(interaction, { linked: true, channelId: raiderChannel.id });
   } catch (error) {
     console.error(`No se pudo vincular ${applicant.id} con ${character}-${realm}:`, error);
     return interaction.editReply(`La bienvenida y la transcripción están guardadas, pero no pude registrar el main en el bot de sync. El canal de apply sigue abierto para que puedas corregir la configuración y reintentar. Detalle: ${error.message}`);
   }
 
   await interaction.channel.delete(`Apply archivado en ${entryChannel.name}; solicitud aceptada por ${interaction.user.tag}`);
+  recordDecisionProgress(interaction, { completed: true });
   const deliveryText = wasNotified ? 'La bienvenida ya se había enviado.' : `Mensaje enviado por ${delivery}.`;
   return interaction.editReply(`Solicitud aceptada. ${deliveryText} Main **${character} · ${realm}** vinculado para sincronizar roles. Transcripción guardada en ${entryChannel} y canal de apply eliminado. Canal de raider: ${raiderChannel}.`);
 }
@@ -691,6 +695,7 @@ async function rejectApplication(interaction) {
     return interaction.editReply(`No puedo archivar la solicitud: ${error.message}`);
   }
 
+  beginDecision(interaction, applicant, character, realm, 'rechazada', reason);
   const archiveMarker = `apply-rejected-transcript:${interaction.channelId}`;
   const archiveMessages = await entryChannel.messages.fetch({ limit: 100 });
   let archiveMessage = archiveMessages.find((message) => message.content.includes(archiveMarker));
@@ -746,6 +751,7 @@ Un saludo y suerte. 💪`;
   }
 
   await interaction.channel.delete(`Apply archivado en ${entryChannel.name}; solicitud rechazada por ${interaction.user.tag}`);
+  recordDecisionProgress(interaction, { completed: true });
   return interaction.editReply(`Solicitud rechazada. ${wasNotified ? 'El aviso ya se había enviado.' : 'Mensaje enviado por MD.'} Transcripción guardada en ${entryChannel} y canal de apply eliminado.`);
 }
 

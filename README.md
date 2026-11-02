@@ -25,7 +25,7 @@ La ficha del apply consulta el perfil público de Raider.IO para añadir nivel d
 ## Configuración
 
 1. Crea una aplicación de Discord y un bot en [Discord Developer Portal](https://discord.com/developers/applications). Copia el token y el Application ID.
-2. Invita el bot al servidor con scopes `bot` y `applications.commands`, y permisos `View Channels`, `Send Messages`, `Embed Links`, `Read Message History`, `Attach Files`, `Manage Channels` y `Manage Roles`. No concedas Administrador.
+2. Invita el bot al servidor con scopes `bot` y `applications.commands`, y permisos `View Channels`, `Send Messages`, `Embed Links`, `Read Message History`, `Attach Files`, `Manage Channels`, `Manage Roles` y `View Audit Log` (**Ver registro de auditoría**). No concedas Administrador.
 3. En Developer Portal → aplicación → **Bot** → **Privileged Gateway Intents**, activa **Message Content Intent**. Es necesario para que el bot pueda leer en las transcripciones el texto de mensajes enviados por candidatos y oficiales. El código también debe iniciar con `GatewayIntentBits.MessageContent`.
 4. Copia `.env.example` a `.env`, completa el token, los IDs y las categorías:
 
@@ -45,6 +45,8 @@ WOW_ROLE_SYNC_BOT_ID=id_usuario_del_bot_de_sync
 Activa el modo desarrollador de Discord para copiar IDs. `WOW_ROLE_SYNC_BOT_ID` es el ID de usuario del bot de WoW Role Sync (puedes copiarlo con clic derecho sobre el bot en el servidor). Coloca las categorías, el canal de entrada y los roles dentro del servidor configurado. En el canal de entrada, el bot necesita `View Channels`, `Send Messages`, `Read Message History` y `Attach Files`. Añade todos los roles de oficiales que deban poder ver y hablar en los canales privados.
 
 Para que `/apply-aceptar` pueda dar acceso al bot de sync en el canal Raider, el rol de **Whitebird Apply** necesita `Manage Roles` y `Manage Channels`, y debe estar por encima del rol más alto de **Whitebird Role Sync** en Ajustes del servidor → Roles. Aplica estos permisos solo al bot de Apply; no uses `Administrator`.
+
+Para instalaciones existentes, activa también **Ver registro de auditoría** en Ajustes del servidor → Roles → **Whitebird Apply** → Permisos. Este permiso permite consultar quién creó un canal o modificó sus permisos para diagnosticar incidencias. Es un permiso de servidor; no se configura en los permisos privados de cada canal. No requiere reiniciar el bot y no añade consultas automáticas de auditoría al flujo de aceptación.
 
 Los textos de las preguntas y los mensajes predefinidos se pueden cambiar en `.env`. El mensaje de aceptación predeterminado es la bienvenida de Recluta integrada en el bot. Si ya tenías una variable `APPLY_ACCEPTED_MESSAGE` en `.env` con el texto anterior, elimínala para usar la bienvenida nueva. El mensaje de rechazo también se puede personalizar con `APPLY_REJECTED_MESSAGE`. Los marcadores disponibles son `{user}`, `{character}`, `{realm}`, `{server}` y `{channel}`. El motivo obligatorio de rechazo solo se incluye en la transcripción y no se manda por MD.
 
@@ -86,4 +88,4 @@ npm run register
 npm start
 ```
 
-Este bot no necesita credenciales de Blizzard ni permisos para gestionar roles de Discord. Las personas con permiso Administrador siempre pueden acceder a cualquier canal del servidor, aunque no estén en los overwrites privados.
+Este bot no necesita credenciales de Blizzard. Necesita `Manage Roles` para configurar los permisos de los canales privados. Las personas con permiso Administrador siempre pueden acceder a cualquier canal del servidor, aunque no estén en los overwrites privados.
