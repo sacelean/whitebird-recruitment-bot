@@ -16,9 +16,25 @@ done
 ssh_dir=$(mktemp -d)
 trap 'rm -rf "$ssh_dir"' EXIT
 chmod 700 "$ssh_dir"
-printf '%s\n' "$OCI_SSH_KEY" > "$ssh_dir/key"
-printf '%s\n' "$OCI_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+printf '%s\n' "$OCI_SSH_KEY" | tr -d '\r' > "$ssh_dir/key"
+printf '%s\n' "$OCI_KNOWN_HOSTS" | tr -d '\r' > "$ssh_dir/known_hosts"
 chmod 600 "$ssh_dir/key" "$ssh_dir/known_hosts"
+if ! ssh-keygen -lf "$ssh_dir/known_hosts" >/dev/null 2>&1; then
+  echo 'OCI_KNOWN_HOSTS is invalid: paste complete known_hosts lines, not SHA256 fingerprints or literal \\n sequences.' >&2
+  exit 1
+fi
+known_host="$OCI_HOST"
+if [[ "$OCI_SSH_PORT" != '22' ]]; then
+  known_host="[$OCI_HOST]:$OCI_SSH_PORT"
+fi
+if ! ssh-keygen -F "$known_host" -f "$ssh_dir/known_hosts" > "$ssh_dir/matching_hosts" 2>/dev/null; then
+  echo 'OCI_KNOWN_HOSTS has no entry matching OCI_HOST and OCI_SSH_PORT. Regenerate it using exactly those values.' >&2
+  exit 1
+fi
+if ! awk '!/^#/ && $2 == "ssh-ed25519" { found=1 } END { exit !found }' "$ssh_dir/matching_hosts"; then
+  echo 'OCI_KNOWN_HOSTS has no ED25519 key for this host. Add the verified ssh-keyscan -t ed25519 entry.' >&2
+  exit 1
+fi
 export RSYNC_RSH="ssh -i $ssh_dir/key -p $OCI_SSH_PORT -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$ssh_dir/known_hosts -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4"
 target="$OCI_USER@$OCI_HOST"
 ssh_options=(-i "$ssh_dir/key" -p "$OCI_SSH_PORT" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$ssh_dir/known_hosts" -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
