@@ -130,3 +130,7 @@ npm start
 ```
 
 Este bot no necesita credenciales de Blizzard. Necesita `Manage Roles` para configurar los permisos de los canales privados. Las personas con permiso Administrador siempre pueden acceder a cualquier canal del servidor, aunque no estén en los overwrites privados.
+
+## Documentación del chatbot
+
+Mantener [docs/knowledge.json](docs/knowledge.json) junto con cada cambio de comportamiento. La pipeline publica la versión verificada en este mismo repositorio y Whitebird-context la recoge con acceso de lectura. Ver [flujo y comprobaciones](docs/context-publication.md).
