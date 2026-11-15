@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "repository": "sacelean/whitebird-recruitment-bot",
-  "revision": "0c08d8df5b1a166396575f05cdb12a1a43ffae5a",
-  "workflowRevision": "0c08d8df5b1a166396575f05cdb12a1a43ffae5a",
-  "runNumber": 11,
-  "runUrl": "https://github.com/sacelean/whitebird-recruitment-bot/actions/runs/43732792229",
-  "verifiedAt": "2026-11-15T15:58:55.933Z",
+  "revision": "2b2e2e9341ec6090254beecb15b768c925fd3276",
+  "workflowRevision": "2b2e2e9341ec6090254beecb15b768c925fd3276",
+  "runNumber": 13,
+  "runUrl": "https://github.com/sacelean/whitebird-recruitment-bot/actions/runs/43736838668",
+  "verifiedAt": "2026-11-15T16:41:36.573Z",
   "verification": "pipeline",
   "document": {
     "schemaVersion": 1,
