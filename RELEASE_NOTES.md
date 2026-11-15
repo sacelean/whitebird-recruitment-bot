@@ -1,5 +1,9 @@
 # Release notes — Whitebird Recruitment Bot
 
+## 2026-11-15 · Rol Recluta al aceptar
+
+- Aceptar un apply asigna inmediatamente el rol Recluta. Si el rol no existe, está duplicado o no es gestionable, se informa del problema; si falla la asignación, el apply permanece abierto para reintentar.
+
 ## Próximo lanzamiento · 2026-10-25
 
 ### Seguridad

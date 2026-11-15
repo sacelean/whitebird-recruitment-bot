@@ -17,6 +17,7 @@ import {
 } from 'discord.js';
 import { getPanel, savePanel, beginDecision, recordDecisionProgress } from './database.js';
 import { saveWowLink } from './wow-links.js';
+import { resolveRecruitRole, assignRecruitRole } from './recruit-role.js';
 import { fetchRaiderIoProfile, makeRaiderIoFields, wowRealmSlug } from './raiderio.js';
 
 const token = process.env.DISCORD_TOKEN;
@@ -524,6 +525,12 @@ async function acceptApplication(interaction) {
   if (applyBotMember.roles.highest.comparePositionTo(syncBotMember.roles.highest) <= 0) {
     return interaction.editReply('No puedo completar la aceptación: coloca el rol de **Whitebird Apply** por encima del rol más alto de **Whitebird Role Sync** en Ajustes del servidor → Roles. Luego vuelve a aceptar.');
   }
+  let recruitRole;
+  try {
+    recruitRole = await resolveRecruitRole(guild, applyBotMember);
+  } catch (error) {
+    return interaction.editReply(`No puedo completar la aceptación: ${error.message}`);
+  }
   const applicant = await guild.members.fetch(applicantId);
   const applicationMessages = await interaction.channel.messages.fetch({ limit: 100 });
   const applicationMessage = applicationMessages.find((message) => message.embeds.some((embed) => embed.title?.startsWith('Apply · ')));
@@ -648,6 +655,12 @@ https://discord.com/channels/1463652921898963146/1463652923253719247`;
   } catch (error) {
     console.error(`No se pudo vincular ${applicant.id} con ${character}-${realm}:`, error);
     return interaction.editReply(`La bienvenida y la transcripción están guardadas, pero no pude registrar el main en el bot de sync. El canal de apply sigue abierto para que puedas corregir la configuración y reintentar. Detalle: ${error.message}`);
+  }
+
+  try {
+    await assignRecruitRole(applicant, recruitRole);
+  } catch {
+    return interaction.editReply('El main y la transcripción están guardados, pero no pude asignar Recluta. Revisa Gestionar roles y la jerarquía del bot de Apply. El apply sigue abierto para reintentar.');
   }
 
   await interaction.channel.delete(`Apply archivado en ${entryChannel.name}; solicitud aceptada por ${interaction.user.tag}`);
